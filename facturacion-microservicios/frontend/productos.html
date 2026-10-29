@@ -19,9 +19,17 @@
     <div class="max-w-7xl mx-auto px-margin lg:px-margin-desktop py-space-xl">
       <div class="flex flex-col w-full">
         <div class="flex flex-col gap-space-xl max-w-5xl mx-auto w-full">
-          <div class="flex flex-col gap-space-xs">
-            <h1 class="font-headline-lg text-headline-lg text-on-surface tracking-tight">Productos</h1>
-            <p class="font-body-md text-body-md text-secondary">Catálogo disponible para facturar</p>
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-space-md">
+            <div class="flex flex-col gap-space-xs">
+              <h1 class="font-headline-lg text-headline-lg text-on-surface tracking-tight">Productos</h1>
+              <p class="font-body-md text-body-md text-secondary">Catálogo disponible para facturar</p>
+            </div>
+            <button class="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-primary-container text-on-primary font-label-md text-label-md hover:bg-primary transition-all duration-150 active:scale-[0.99] shadow-sm" id="new-product-button" type="button">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewBox="0 0 16 16">
+                <path d="M8 3v10M3 8h10"></path>
+              </svg>
+              <span>Nuevo producto</span>
+            </button>
           </div>
 
           <div class="bg-surface-container-lowest rounded-xl shadow-[0_4px_20px_rgba(29,27,36,0.03)] overflow-hidden" id="catalog-table">
@@ -33,11 +41,12 @@
                     <th class="px-space-md py-space-sm font-label-sm text-label-sm text-secondary uppercase tracking-wider" scope="col">Nombre</th>
                     <th class="px-space-md py-space-sm font-label-sm text-label-sm text-secondary uppercase tracking-wider text-right w-44" scope="col">Precio</th>
                     <th class="pl-space-md pr-space-lg py-space-sm font-label-sm text-label-sm text-secondary uppercase tracking-wider text-right w-32" scope="col">Stock</th>
+                    <th class="px-space-md py-space-sm font-label-sm text-label-sm text-secondary uppercase tracking-wider text-right w-40" scope="col">Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="catalog-rows">
                   <tr>
-                    <td class="py-12 text-center text-on-surface-variant" colspan="4">Cargando productos...</td>
+                    <td class="py-12 text-center text-on-surface-variant" colspan="5">Cargando productos...</td>
                   </tr>
                 </tbody>
               </table>
@@ -50,6 +59,10 @@
             </div>
             <p class="font-headline-sm text-headline-sm text-on-surface mb-1">No hay productos registrados</p>
             <p class="font-body-md text-body-md text-on-surface-variant max-w-sm">El catálogo se encuentra vacío actualmente.</p>
+            <button class="mt-4 inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-primary-container text-on-primary font-label-md text-label-md hover:bg-primary transition-colors" id="empty-new-product-button" type="button">
+              <span class="material-symbols-outlined text-[18px]">add</span>
+              Crear el primer producto
+            </button>
           </div>
         </div>
       </div>
@@ -57,6 +70,57 @@
   </main>
 
   <div id="app-footer"></div>
+
+  <!-- Modal producto -->
+  <div class="hidden fixed inset-0 z-50 items-center justify-center px-4 bg-on-background/30 backdrop-blur-sm" id="product-modal">
+    <div aria-labelledby="product-modal-title" aria-modal="true" class="bg-surface-container-lowest w-full max-w-[520px] max-h-[90vh] overflow-y-auto rounded-2xl shadow-xl p-space-xl" role="dialog">
+      <div class="flex items-center justify-between pb-space-md">
+        <div>
+          <h2 class="font-headline-lg text-headline-lg text-on-surface tracking-tight" id="product-modal-title">Nuevo producto</h2>
+          <p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5" id="product-modal-subtitle">Ingresa los datos del producto para el catálogo.</p>
+        </div>
+        <button aria-label="Cerrar modal" class="w-9 h-9 rounded-full flex items-center justify-center text-secondary hover:text-on-surface hover:bg-surface-container transition-colors" id="close-product-modal-btn" type="button">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+
+      <div class="hidden mb-space-md items-center gap-2 px-3 py-2 bg-error-container rounded-lg text-on-error-container" id="product-form-error">
+        <span class="material-symbols-outlined text-[16px] text-error shrink-0">error</span>
+        <span class="font-body-sm text-body-sm font-medium" id="product-form-error-text"></span>
+      </div>
+
+      <form class="space-y-space-md mt-space-md" id="product-form" novalidate>
+        <div class="flex flex-col gap-1.5">
+          <label class="font-label-md text-label-md text-on-surface flex items-center justify-between" for="product-name">
+            <span>Nombre</span>
+            <span class="font-body-sm text-body-sm text-outline">Obligatorio</span>
+          </label>
+          <input class="w-full h-10 px-3.5 bg-surface-container-lowest text-on-surface placeholder:text-outline font-body-md text-body-md rounded-xl shadow-sm focus:outline-none transition-all" id="product-name" name="product-name" placeholder="Ej. Teclado mecánico" type="text" />
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label class="font-label-md text-label-md text-on-surface flex items-center justify-between" for="product-precio">
+            <span>Precio (COP)</span>
+            <span class="font-body-sm text-body-sm text-outline">Mayor a 0</span>
+          </label>
+          <input class="w-full h-10 px-3.5 bg-surface-container-lowest text-on-surface placeholder:text-outline font-body-md text-body-md rounded-xl shadow-sm focus:outline-none transition-all" id="product-precio" name="product-precio" placeholder="Ej. 150000" inputmode="decimal" min="0" step="any" type="number" />
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label class="font-label-md text-label-md text-on-surface flex items-center justify-between" for="product-stock">
+            <span>Stock</span>
+            <span class="font-body-sm text-body-sm text-outline">Entero mayor o igual a 0</span>
+          </label>
+          <input class="w-full h-10 px-3.5 bg-surface-container-lowest text-on-surface placeholder:text-outline font-body-md text-body-md rounded-xl shadow-sm focus:outline-none transition-all" id="product-stock" name="product-stock" placeholder="Ej. 10" inputmode="numeric" min="0" step="1" type="number" />
+        </div>
+        <div class="pt-space-lg flex items-center justify-end gap-space-md">
+          <button class="h-11 px-5 rounded-xl bg-surface-container-lowest text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors shadow-sm" id="cancel-product-btn" type="button">Cancelar</button>
+          <button class="h-11 px-6 rounded-xl bg-primary-container text-on-primary font-label-md text-label-md shadow-md hover:bg-primary transition-all active:scale-[0.99] flex items-center gap-2" id="save-product-btn" type="submit">
+            <span class="material-symbols-outlined text-[18px]">check</span>
+            <span id="save-product-btn-text">Guardar producto</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script type="module" src="js/productos.js"></script>
 </body>

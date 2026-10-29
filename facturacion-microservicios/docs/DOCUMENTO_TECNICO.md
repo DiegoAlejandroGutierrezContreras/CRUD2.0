@@ -12,7 +12,7 @@ El sistema implementa una arquitectura orientada a microservicios independientes
 
 ### Componentes:
 
-1. **Frontend (JavaScript / HTML):** Interfaz multipágina desacoplada servida por un servidor web estático (`:3000`). Incluye inicio de sesión, registro, catálogo de productos, directorio de clientes con CRUD completo, emisión de facturas con control de stock, historial y detalle de factura con modal JSON e impresión a PDF.
+1. **Frontend (JavaScript / HTML):** Interfaz multipágina desacoplada servida por un servidor web estático (`:3000`). Incluye inicio de sesión, registro, catálogo de productos con CRUD, directorio de clientes con CRUD completo, emisión de facturas con control de stock, historial y detalle de factura con modal JSON e impresión a PDF.
 2. **Servicio 1 - Autenticación (`:8081`):** Microservicio para registro, login y consulta de usuarios. No emite tokens ni maneja roles; las contraseñas se almacenan en texto plano como simplificación académica. Persiste en `data/usuarios.json`.
 3. **Servicio 2 - Productos (`:8082`):** Microservicio para operaciones CRUD del catálogo (precios y stock) y para el descuento atómico de stock solicitado por Facturación. Rutas abiertas, sin JWT ni autorización. Persiste en `data/productos.json`.
 4. **Servicio 3 - Clientes (`:8083`):** Microservicio para operaciones CRUD de clientes (nombre, cédula cc, correo, dirección). Rutas abiertas, sin JWT ni autorización. Persiste en `data/clientes.json`.
@@ -180,7 +180,7 @@ Esquema: `{ "factura_id", "cliente": {"id","nombre","email"}, "usuario": {"id","
 - **Sin roles.** Todos los usuarios registrados tienen las mismas capacidades; los modelos `Usuario`, `UsuarioSinPassword` y `FacturaUsuario`, los seeds y la interfaz no incluyen el campo `rol`.
 - **Contraseñas en texto plano.** Es una simplificación acordada por el equipo para el alcance académico. Un sistema real debe usar un hash con sal (por ejemplo, Argon2id o bcrypt) y nunca almacenar contraseñas legibles.
 - **Endpoints abiertos.** La "sesión" del frontend es solo visual: `localStorage` guarda el usuario para mostrar su nombre y evitar entrar a páginas internas sin haber iniciado sesión, pero no autentica las llamadas HTTP.
-- **Sin edición de facturas en la interfaz.** Las facturas son inmutables una vez emitidas. El directorio de clientes se administra desde la interfaz y el catálogo de productos es de solo lectura.
+- **Sin edición de facturas en la interfaz.** Las facturas son inmutables una vez emitidas. El CRUD de productos y clientes se administra desde la interfaz.
 - **Sin generación de PDF en el servidor.** La impresión y el guardado en PDF se delegan al navegador.
 
 ### Pruebas automatizadas

@@ -159,7 +159,7 @@ Body de `POST /facturas`:
 | :--- | :--- |
 | `index.html` | Inicio de sesión |
 | `registro.html` | Creación de cuenta |
-| `productos.html` | Catálogo de productos (solo lectura) |
+| `productos.html` | Catálogo de productos con CRUD (crear, editar y eliminar) |
 | `clientes.html` | Directorio de clientes con CRUD completo (crear, editar y eliminar) |
 | `nueva-factura.html` | Selección de cliente, carrito y validación de stock |
 | `facturas.html` | Historial de facturas |
