@@ -278,18 +278,11 @@ facturacion-microservicios/
 
 ---
 
-## Pruebas
+## Verificación
 
 ```bash
 go build ./...
 go vet ./...
-go test ./...
 ```
 
-Las pruebas cubren:
-
-- `internal/jsondb`: creación concurrente de IDs, `Transact` con confirmación y reversión, reapertura del archivo.
-- `internal/auth`: registro con rol (`admin`/`cliente`), rechazo de rol ausente o inválido, normalización del rol, login y consulta de usuarios sin password.
-- `internal/clientes`: CRUD completo (listar, consultar, crear, actualizar y eliminar), validaciones de cédula/correo y unicidad de email y CC.
-- `internal/productos`: descuento atómico de stock, lote inválido sin cambios, ítems repetidos y validaciones.
-- `internal/facturacion`: emisión con rol del emisor, descuento de stock, rechazo por stock insuficiente, compensación si falla el descuento, listado filtrado por `?email=` del cliente, detalle con `403` si el correo no coincide y validación de referencias.
+> **Nota sobre entregable.** Durante el desarrollo se escribieron pruebas unitarias con la librería estándar de Go (`testing` + `httptest`) para `internal/jsondb`, `internal/auth`, `internal/clientes`, `internal/productos` y `internal/facturacion`, que cubrían: creación concurrente de IDs, transacciones con confirmación y reversión, registro con rol (`admin`/`cliente`) y rechazo de roles inválidos, unicidad de email/CC, descuento atómico de stock con compensación, emisión de facturas con `usuario.rol`, listado filtrado por `?email=` del cliente, `403` en detalle ajeno y validación de referencias. Al quedar todo el sistema verificado, los archivos de pruebas se eliminaron para dejar en el repositorio únicamente el sistema ejecutable y los entregables del enunciado; la verificación final del sistema se hace manualmente (ver *Flujo de Emisión y Control de Stock* y *Roles y Permisos*).

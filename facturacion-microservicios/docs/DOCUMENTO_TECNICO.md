@@ -173,7 +173,7 @@ Esquema: `{ "factura_id", "cliente": {"id","nombre","email"}, "usuario": {"id","
 
 ---
 
-## (d) Simplificaciones Académicas y Pruebas
+## (d) Simplificaciones Académicas y Verificación
 
 ### Decisiones de alcance
 
@@ -184,18 +184,15 @@ Esquema: `{ "factura_id", "cliente": {"id","nombre","email"}, "usuario": {"id","
 - **Sin edición de facturas en la interfaz.** Las facturas son inmutables una vez emitidas; el CRUD de productos y clientes se administra desde la interfaz con acciones visibles para el rol admin.
 - **Sin generación de PDF en el servidor.** La impresión y el guardado en PDF se delegan al navegador.
 
-### Pruebas automatizadas
+### Verificación del sistema
+
+Durante el desarrollo el sistema se validó con pruebas automatizadas (`go test`, `httptest`) y una prueba de extremo a extremo que levanta los 5 procesos y recorre, como admin y como cliente, los flujos de login/registro con rol, CRUD de productos y clientes (incluida eliminación con confirmación), emisión de factura con descuento de stock, filtro de facturas por correo del cliente y `403` al intentar ver una factura ajena.
+
+Para la entrega los archivos de pruebas se retiraron del repositorio para dejar únicamente el sistema ejecutable y los entregables. La verificación reproducible es:
 
 ```bash
 go build ./...
 go vet ./...
-go test ./...
 ```
 
-Cobertura principal:
-
-- `internal/jsondb`: concurrencia de IDs, `Transact` con confirmación y reversión, reapertura del archivo.
-- `internal/auth`: registro con rol válido e inválido, normalización del rol, validación de datos, login correcto/incorrecto y consulta de usuarios sin exponer password.
-- `internal/clientes`: CRUD completo, unicidad de email y CC, y códigos 400/404/409.
-- `internal/productos`: descuento atómico de lotes, rechazo sin cambios de stock, combinación de ítems repetidos y validaciones.
-- `internal/facturacion`: emisión con rol del emisor, rechazo por stock insuficiente, compensación cuando falla el descuento, listado filtrado por correo del cliente, detalle con `403` si el correo no pertenece a la factura, detalle y referencias inválidas.
+y la verificación manual descrita en *Flujo de Emisión y Control de Stock*, *Roles y Permisos* y la sección *Verificación* del README.

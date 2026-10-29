@@ -1,95 +1,48 @@
 # Sistema de Facturación Digital (Microservicios)
 
-Proyecto de Programación Avanzada 2026_2. Sistema de facturación basado en arquitectura de microservicios desarrollado en Go utilizando exclusivamente la librería estándar `net/http`, base de datos persistente en archivos JSON y una interfaz de usuario web multipágina desarrollada en JavaScript.
+Proyecto de Programación Avanzada 2026_2: sistema de facturación con arquitectura de microservicios en Go (solo librería estándar `net/http`), persistencia en archivos JSON e interfaz web multipágina en JavaScript puro.
 
-El código y los microservicios se encuentran en la carpeta `facturacion-microservicios/`.
+Todo el código vive en la carpeta [`facturacion-microservicios/`](facturacion-microservicios/).
 
-> **Alcance académico:** el sistema no usa JWT, tokens, sesiones, cookies, OAuth ni roles. El login valida las credenciales y el frontend guarda únicamente los datos del usuario en `localStorage` para personalizar la interfaz. Las contraseñas se almacenan en texto plano por decisión del equipo; **no es un diseño apto para producción**.
+> **Alcance académico:** no se usan JWT, tokens, sesiones, cookies ni OAuth. El campo `rol` (`admin` o `cliente`) adapta la interfaz del frontend y filtra las facturas del cliente, pero **la API no exige autorización por rol**. Las contraseñas se almacenan en texto plano por decisión del equipo; **no es un diseño apto para producción**.
 
----
+## Opciones del sistema
 
-## Requisitos
-
-- **Go 1.22** o superior instalado en el sistema.
-- Navegador web moderno (Chrome, Edge, Firefox, Safari) con conexión a Internet para cargar Tailwind CDN y las fuentes.
-
----
-
-## Puertos y Servicios
-
-| Servicio | Puerto | Descripción | Archivo de Persistencia |
-| :--- | :---: | :--- | :--- |
-| **Autenticación** | `8081` | Registro, login y consulta de usuarios (sin tokens ni roles) | `data/usuarios.json` |
-| **Productos** | `8082` | CRUD de catálogo de productos y descuento atómico de stock | `data/productos.json` |
-| **Clientes** | `8083` | CRUD de clientes con nombre, cédula, correo y dirección | `data/clientes.json` |
-| **Facturación** | `8084` | Orquestador que consume los 3 anteriores y emite facturas | `data/facturas.json` |
-| **Frontend Web** | `3000` | Servidor web estático que sirve la interfaz de usuario | Carpeta `frontend/` |
-
----
-
-## Credenciales de Prueba
-
-Usuarios registrados en `data/usuarios.json` (contraseña en texto plano, sin campo `rol`):
-
-- `ricardo@example.com` / `admin123`
-- `maria@example.com` / `cliente123`
-
-Ambos usuarios tienen exactamente las mismas capacidades dentro del sistema.
-
----
-
-## Ejecución
-
-Abrir una terminal por servicio desde la carpeta `facturacion-microservicios/`:
-
-```bash
-# Terminal 1 - Autenticación
-go run ./cmd/auth
-
-# Terminal 2 - Productos
-go run ./cmd/productos
-
-# Terminal 3 - Clientes
-go run ./cmd/clientes
-
-# Terminal 4 - Facturación
-go run ./cmd/facturacion
-
-# Terminal 5 - Frontend Web
-go run ./cmd/web
-```
-
-Abrir en el navegador: **http://localhost:3000**
-
----
-
-## Pantallas del Frontend
-
-| Página | Descripción |
+| Rol | Puede |
 | :--- | :--- |
-| `index.html` | Inicio de sesión |
-| `registro.html` | Creación de cuenta |
-| `productos.html` | Catálogo de productos (solo lectura) |
-| `clientes.html` | Directorio de clientes y modal de creación |
-| `nueva-factura.html` | Selección de cliente, carrito y validación de stock |
-| `facturas.html` | Historial de facturas |
-| `factura.html` | Detalle de factura, modal JSON e impresión / PDF |
+| **Admin** | Catálogo de productos con CRUD, CRUD de clientes, emitir facturas y ver todas las facturas |
+| **Cliente** | Catálogo en solo lectura y ver únicamente sus facturas (`factura.cliente.email == usuario.email`) |
 
----
+## Ejecución rápida
 
-## Pruebas
-
-Desde `facturacion-microservicios/`:
+Desde `facturacion-microservicios/`, abrir 5 terminales (o seguir los comandos del README interno):
 
 ```bash
-go build ./...
-go vet ./...
-go test ./...
+go run ./cmd/auth         # 8081
+go run ./cmd/productos    # 8082
+go run ./cmd/clientes     # 8083
+go run ./cmd/facturacion  # 8084
+go run ./cmd/web          # 3000 -> http://localhost:3000
 ```
 
----
+**Credenciales de prueba** (contraseñas en texto plano):
+
+- `ricardo@example.com` / `admin123` — rol admin
+- `maria@example.com` / `cliente123` — rol cliente
+- `diego@gmail.com` / `diego123` — rol admin
+
+## Estructura
+
+```text
+facturacion-microservicios/
+├── cmd/                # 1 binario por proceso (auth, productos, clientes, facturacion, web)
+├── internal/           # logica de cada servicio, jsondb, httpx y middleware CORS
+├── data/               # persistencia JSON (usuarios, productos, clientes, facturas)
+├── frontend/           # interfaz multipágina (HTML + JS modules + CSS)
+└── docs/               # DOCUMENTO_TECNICO.md
+```
 
 ## Documentación
 
-- `facturacion-microservicios/README.md`: detalle de endpoints, flujos y estructura.
-- `facturacion-microservicios/docs/DOCUMENTO_TECNICO.md`: documento técnico de arquitectura y flujos.
+- [`facturacion-microservicios/README.md`](facturacion-microservicios/README.md): endpoints de cada servicio, flujos, estructura y verificación.
+- [`facturacion-microservicios/docs/DOCUMENTO_TECNICO.md`](facturacion-microservicios/docs/DOCUMENTO_TECNICO.md): arquitectura, decisiones de alcance y verificación del sistema.

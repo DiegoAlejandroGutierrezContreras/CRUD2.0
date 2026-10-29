@@ -3,7 +3,7 @@
 import { API } from "./config.js";
 import { apiGet, apiPost } from "./api.js";
 import { initLayout } from "./layout.js";
-import { escapeHTML, formatCurrency, setButtonLoading, showToast } from "./ui.js";
+import { formatCurrency, setButtonLoading, showToast } from "./ui.js";
 
 const state = {
   usuario: null,
