@@ -10,11 +10,6 @@ export function rolValido(rol) {
   return ROLES_VALIDOS.includes(rol);
 }
 
-/** Retorna true si el usuario (o el de la sesión) tiene rol admin. */
-export function isAdmin(usuario = getUsuario()) {
-  return usuario?.rol === "admin";
-}
-
 export function getUsuario() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
