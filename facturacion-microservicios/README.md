@@ -160,7 +160,7 @@ Body de `POST /facturas`:
 | `index.html` | Inicio de sesión |
 | `registro.html` | Creación de cuenta |
 | `productos.html` | Catálogo de productos (solo lectura) |
-| `clientes.html` | Directorio de clientes y modal de creación |
+| `clientes.html` | Directorio de clientes con CRUD completo (crear, editar y eliminar) |
 | `nueva-factura.html` | Selección de cliente, carrito y validación de stock |
 | `facturas.html` | Historial de facturas |
 | `factura.html` | Detalle de factura, modal JSON e impresión / PDF |
@@ -233,5 +233,6 @@ Las pruebas cubren:
 
 - `internal/jsondb`: creación concurrente de IDs, `Transact` con confirmación y reversión, reapertura del archivo.
 - `internal/auth`: registro, login y consulta de usuarios sin password ni rol.
+- `internal/clientes`: CRUD completo (listar, consultar, crear, actualizar y eliminar), validaciones de cédula/correo y unicidad de email y CC.
 - `internal/productos`: descuento atómico de stock, lote inválido sin cambios, ítems repetidos y validaciones.
 - `internal/facturacion`: emisión con descuento de stock, rechazo por stock insuficiente, compensación si falla el descuento, listado, detalle y validación de referencias.

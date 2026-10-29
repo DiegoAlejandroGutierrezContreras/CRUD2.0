@@ -41,12 +41,13 @@
                   <th class="px-6 py-2.5 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider" scope="col">Cédula</th>
                   <th class="px-6 py-2.5 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider" scope="col">Correo electrónico</th>
                   <th class="px-6 py-2.5 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider" scope="col">Dirección</th>
-                </tr>
-              </thead>
-              <tbody id="clients-table-body">
-                <tr>
-                  <td class="py-12 text-center text-on-surface-variant" colspan="5">Cargando clientes...</td>
-                </tr>
+                  <th class="px-6 py-2.5 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider text-right w-36" scope="col">Acciones</th>
+                 </tr>
+               </thead>
+               <tbody id="clients-table-body">
+                 <tr>
+                   <td class="py-12 text-center text-on-surface-variant" colspan="6">Cargando clientes...</td>
+                 </tr>
               </tbody>
             </table>
           </div>
@@ -75,7 +76,7 @@
       <div class="flex items-center justify-between pb-space-md">
         <div>
           <h2 class="font-headline-lg text-headline-lg text-on-surface tracking-tight" id="modal-title">Nuevo cliente</h2>
-          <p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Ingresa los datos para incorporar el cliente al directorio de facturación.</p>
+          <p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5" id="modal-subtitle">Ingresa los datos para incorporar el cliente al directorio de facturación.</p>
         </div>
         <button aria-label="Cerrar modal" class="w-9 h-9 rounded-full flex items-center justify-center text-secondary hover:text-on-surface hover:bg-surface-container transition-colors" id="close-modal-btn" type="button">
           <span class="material-symbols-outlined text-[20px]">close</span>
@@ -114,7 +115,7 @@
           <button class="h-11 px-5 rounded-xl bg-surface-container-lowest text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors shadow-sm" id="cancel-btn" type="button">Cancelar</button>
           <button class="h-11 px-6 rounded-xl bg-primary-container text-on-primary font-label-md text-label-md shadow-md hover:bg-primary transition-all active:scale-[0.99] flex items-center gap-2" id="save-client-btn" type="submit">
             <span class="material-symbols-outlined text-[18px]">check</span>
-            Guardar cliente
+            <span id="save-client-btn-text">Guardar cliente</span>
           </button>
         </div>
       </form>

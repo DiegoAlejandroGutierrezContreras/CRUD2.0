@@ -63,3 +63,9 @@ export const apiGet = (baseUrl, path) => apiFetch(baseUrl, path);
 
 export const apiPost = (baseUrl, path, body) =>
   apiFetch(baseUrl, path, { method: "POST", body: JSON.stringify(body) });
+
+export const apiPut = (baseUrl, path, body) =>
+  apiFetch(baseUrl, path, { method: "PUT", body: JSON.stringify(body) });
+
+export const apiDelete = (baseUrl, path) =>
+  apiFetch(baseUrl, path, { method: "DELETE" });
