@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -41,7 +42,7 @@ func nuevoEntorno(t *testing.T) *entorno {
 		t.Fatalf("store usuarios: %v", err)
 	}
 	if _, err := usuarios.Create(auth.Usuario{
-		Nombre: "Ricardo Gómez", Email: "ricardo@example.com", Password: "admin123",
+		Nombre: "Ricardo Gómez", Email: "ricardo@example.com", Password: "admin123", Rol: auth.RolAdmin,
 	}); err != nil {
 		t.Fatalf("seed usuario: %v", err)
 	}
@@ -173,9 +174,6 @@ func TestCrearFacturaDescuentaStock(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("se esperaba 201, se obtuvo %d: %s", resp.StatusCode, body)
 	}
-	if strings.Contains(string(body), `"rol"`) {
-		t.Fatalf("la factura no debe incluir rol: %s", body)
-	}
 
 	var factura Factura
 	if err := json.Unmarshal(body, &factura); err != nil {
@@ -190,6 +188,9 @@ func TestCrearFacturaDescuentaStock(t *testing.T) {
 	}
 	if factura.Usuario.ID != 1 || factura.Usuario.Nombre != "Ricardo Gómez" {
 		t.Fatalf("usuario inesperado: %+v", factura.Usuario)
+	}
+	if factura.Usuario.Rol != auth.RolAdmin {
+		t.Fatalf("la factura debe incluir el rol del usuario emisor: %+v", factura.Usuario)
 	}
 	if factura.Total != 3524000 {
 		t.Fatalf("total esperado 3524000, obtenido %v", factura.Total)
@@ -408,5 +409,123 @@ func TestCalcularTotalRedondea(t *testing.T) {
 	}
 	if got := CalculateTotal(items); got != 0.5 {
 		t.Fatalf("total esperado 0.5, obtenido %v", got)
+	}
+}
+
+func TestListarFacturasFiltraPorEmailCliente(t *testing.T) {
+	e := nuevoEntorno(t)
+
+	for _, clienteID := range []int{201, 202} {
+		resp, body := enviarFactura(t, e.factSrv.URL, CreateFacturaRequest{
+			UsuarioID: 1,
+			ClienteID: clienteID,
+			Items:     []CreateFacturaItem{{ProductoID: 102, Cantidad: 1}},
+		})
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("crear factura: %d %s", resp.StatusCode, body)
+		}
+	}
+
+	casos := []struct {
+		nombre   string
+		email    string
+		esperado int
+		factura  int
+	}{
+		{"sin filtro ve todas", "", 2, 0},
+		{"correo en mayúsculas", "CARLOS@EXAMPLE.COM", 1, 5001},
+		{"correo del otro cliente", "ana@example.com", 1, 5002},
+		{"correo sin facturas", "nadie@example.com", 0, 0},
+	}
+
+	for _, caso := range casos {
+		t.Run(caso.nombre, func(t *testing.T) {
+			url := e.factSrv.URL + "/facturas"
+			if caso.email != "" {
+				url += "?email=" + caso.email
+			}
+			resp, err := http.Get(url)
+			if err != nil {
+				t.Fatalf("get: %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("se esperaba 200, se obtuvo %d", resp.StatusCode)
+			}
+
+			var lista []Factura
+			if err := json.NewDecoder(resp.Body).Decode(&lista); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if len(lista) != caso.esperado {
+				t.Fatalf("se esperaban %d facturas, hay %d", caso.esperado, len(lista))
+			}
+			if caso.factura != 0 && (len(lista) == 0 || lista[0].FacturaID != caso.factura) {
+				t.Fatalf("factura inesperada: %+v", lista)
+			}
+		})
+	}
+}
+
+func TestDetalleFacturaValidaEmailCliente(t *testing.T) {
+	e := nuevoEntorno(t)
+
+	resp, body := enviarFactura(t, e.factSrv.URL, CreateFacturaRequest{
+		UsuarioID: 1,
+		ClienteID: 201,
+		Items:     []CreateFacturaItem{{ProductoID: 102, Cantidad: 1}},
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("crear factura: %d %s", resp.StatusCode, body)
+	}
+
+	// El correo coincide (en cualquier combinación de mayúsculas): 200.
+	for _, email := range []string{"carlos@example.com", "CARLOS@example.com"} {
+		detalle, err := http.Get(e.factSrv.URL + "/facturas/5001?email=" + email)
+		if err != nil {
+			t.Fatalf("get: %v", err)
+		}
+		if detalle.StatusCode != http.StatusOK {
+			t.Fatalf("dueño de la factura: se esperaba 200, se obtuvo %d", detalle.StatusCode)
+		}
+		detalle.Body.Close()
+	}
+
+	// El correo es de otro cliente: 403 con el mensaje de acceso.
+	detalle, err := http.Get(e.factSrv.URL + "/facturas/5001?email=ana@example.com")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer detalle.Body.Close()
+
+	if detalle.StatusCode != http.StatusForbidden {
+		t.Fatalf("otro cliente: se esperaba 403, se obtuvo %d", detalle.StatusCode)
+	}
+	data, err := io.ReadAll(detalle.Body)
+	if err != nil {
+		t.Fatalf("leer body: %v", err)
+	}
+	if !strings.Contains(string(data), "No tienes acceso a esta factura") {
+		t.Fatalf("mensaje inesperado: %s", data)
+	}
+
+	// Sin filtro el detalle sigue disponible (la API es visual, no exige rol).
+	completo, err := http.Get(e.factSrv.URL + "/facturas/5001")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer completo.Body.Close()
+	if completo.StatusCode != http.StatusOK {
+		t.Fatalf("sin filtro: se esperaba 200, se obtuvo %d", completo.StatusCode)
+	}
+
+	// Una factura inexistente sigue respondiendo 404 con el filtro puesto.
+	inexistente, err := http.Get(e.factSrv.URL + "/facturas/9999?email=carlos@example.com")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer inexistente.Body.Close()
+	if inexistente.StatusCode != http.StatusNotFound {
+		t.Fatalf("se esperaba 404, se obtuvo %d", inexistente.StatusCode)
 	}
 }

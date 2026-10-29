@@ -47,6 +47,13 @@
               <input autocomplete="new-password" class="h-[44px] w-full px-space-md bg-surface-container-lowest rounded-lg font-body-md text-body-md text-on-surface placeholder:text-outline/60 outline-none transition-all duration-150" id="password" minlength="6" name="password" placeholder="••••••••" required type="password" />
               <p class="font-body-sm text-body-sm text-secondary pt-0.5 select-none">Mínimo 6 caracteres</p>
             </div>
+            <div class="flex flex-col gap-space-xs">
+              <label class="font-label-md text-label-md text-on-surface" for="rol">Tipo de cuenta</label>
+              <select autocomplete="off" class="h-[44px] w-full px-space-md bg-surface-container-lowest rounded-lg font-body-md text-body-md text-on-surface outline-none transition-all duration-150 cursor-pointer" id="rol" name="rol" required>
+                <option value="cliente">Cliente</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </div>
             <div class="pt-space-sm">
               <button class="relative h-[44px] w-full bg-primary-container hover:bg-primary active:scale-[0.99] text-on-primary font-label-md text-label-md rounded-lg flex items-center justify-center gap-2 transition-all duration-150 select-none cursor-pointer" id="submit-button" type="submit">
                 Crear cuenta

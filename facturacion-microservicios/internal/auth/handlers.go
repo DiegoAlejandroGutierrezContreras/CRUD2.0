@@ -59,6 +59,13 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validar el rol: obligatorio y debe ser "admin" o "cliente".
+	req.Rol = strings.ToLower(strings.TrimSpace(req.Rol))
+	if !RolValido(req.Rol) {
+		httpx.RespondError(w, http.StatusBadRequest, "El rol debe ser \"admin\" o \"cliente\"")
+		return
+	}
+
 	// Verificar email único
 	existing, err := h.store.FindOne(func(u *Usuario) bool {
 		return strings.EqualFold(u.Email, req.Email)
@@ -76,6 +83,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		Nombre:   req.Nombre,
 		Email:    req.Email,
 		Password: req.Password,
+		Rol:      req.Rol,
 	}
 
 	usuario, err = h.store.Create(usuario)

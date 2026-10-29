@@ -8,6 +8,8 @@ import { formatCurrency, setButtonLoading, showToast } from "./ui.js";
 let products = [];
 let modalElement = null;
 let editingProductId = null;
+// El catálogo con CRUD es solo del rol admin. El rol cliente lo ve en lectura.
+let canManageProducts = false;
 
 function renderRows(list) {
   const tbody = document.getElementById("catalog-rows");
@@ -41,18 +43,20 @@ function renderRows(list) {
         <span class="product-stock ${product.stock > 0 ? "text-on-surface" : "text-error font-semibold"}"></span>
       </td>
       <td class="px-space-md py-space-sm text-right whitespace-nowrap product-actions">
-        <button class="h-8 px-3 inline-flex items-center rounded-lg font-label-md text-label-md bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors" data-action="edit" type="button">Editar</button>
-        <button class="h-8 px-3 inline-flex items-center rounded-lg font-label-md text-label-md bg-error-container/60 text-error hover:bg-error-container transition-colors" data-action="delete" type="button">Eliminar</button>
+        <button class="h-8 px-3 inline-flex items-center rounded-lg font-label-md text-label-md bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors" data-action="edit" type="button" ${canManageProducts ? "" : "hidden"}>Editar</button>
+        <button class="h-8 px-3 inline-flex items-center rounded-lg font-label-md text-label-md bg-error-container/60 text-error hover:bg-error-container transition-colors" data-action="delete" type="button" ${canManageProducts ? "" : "hidden"}>Eliminar</button>
       </td>
     `;
     row.querySelector(".product-name").textContent = product.nombre;
     row.querySelector(".product-stock").textContent = product.stock;
-    row
-      .querySelector('[data-action="edit"]')
-      .addEventListener("click", () => openModal(product));
-    row
-      .querySelector('[data-action="delete"]')
-      .addEventListener("click", () => deleteProduct(product));
+    if (canManageProducts) {
+      row
+        .querySelector('[data-action="edit"]')
+        .addEventListener("click", () => openModal(product));
+      row
+        .querySelector('[data-action="delete"]')
+        .addEventListener("click", () => deleteProduct(product));
+    }
     tbody.appendChild(row);
   });
 }
@@ -207,6 +211,16 @@ function initModal() {
   });
 }
 
-initLayout("productos");
-initModal();
+// initLayout valida sesión y rol (cliente y admin pueden entrar aquí).
+const usuarioActual = initLayout("productos");
+
+canManageProducts = usuarioActual?.rol === "admin";
+
+if (canManageProducts) {
+  initModal();
+} else {
+  document.getElementById("new-product-button")?.classList.add("hidden");
+  document.getElementById("empty-new-product-button")?.classList.add("hidden");
+  document.getElementById("catalog-actions-heading")?.classList.add("hidden");
+}
 loadProducts();

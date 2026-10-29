@@ -1,9 +1,24 @@
-// Historial de facturas.
+// Historial de facturas. El rol admin ve todas; el rol cliente solo las
+// facturas de su correo (factura.cliente.email == usuario.email).
 
 import { API } from "./config.js";
 import { apiGet } from "./api.js";
 import { initLayout } from "./layout.js";
-import { escapeHTML, formatCurrency, formatDate, showToast } from "./ui.js";
+import { formatCurrency, formatDate, showToast } from "./ui.js";
+
+function aplicarVistaPorRol(usuario) {
+  const esAdmin = usuario?.rol === "admin";
+  if (esAdmin) return;
+
+  document.getElementById("new-invoice-button")?.classList.add("hidden");
+  document.getElementById("empty-new-invoice-button")?.classList.add("hidden");
+
+  const subtitle = document.getElementById("facturas-subtitle");
+  if (subtitle) subtitle.textContent = "Facturas emitidas a tu correo";
+
+  const emptyTitle = document.getElementById("facturas-empty-title");
+  if (emptyTitle) emptyTitle.textContent = "No tienes facturas registradas";
+}
 
 function renderFacturas(facturas) {
   const tbody = document.getElementById("facturas-rows");
@@ -44,14 +59,19 @@ function renderFacturas(facturas) {
   });
 }
 
-async function loadFacturas() {
+async function loadFacturas(usuario) {
   const tbody = document.getElementById("facturas-rows");
   if (tbody) {
     tbody.innerHTML = `<tr><td class="py-12 text-center text-on-surface-variant" colspan="5">Cargando facturas...</td></tr>`;
   }
 
+  const esAdmin = usuario?.rol === "admin";
+  const path = esAdmin
+    ? "/facturas"
+    : `/facturas?email=${encodeURIComponent(usuario?.email ?? "")}`;
+
   try {
-    const facturas = await apiGet(API.facturacion, "/facturas");
+    const facturas = await apiGet(API.facturacion, path);
     const list = Array.isArray(facturas) ? facturas : [];
     list.sort((a, b) => b.factura_id - a.factura_id);
     renderFacturas(list);
@@ -66,5 +86,6 @@ async function loadFacturas() {
   }
 }
 
-initLayout("facturas");
-loadFacturas();
+const usuario = initLayout("facturas");
+aplicarVistaPorRol(usuario);
+loadFacturas(usuario);

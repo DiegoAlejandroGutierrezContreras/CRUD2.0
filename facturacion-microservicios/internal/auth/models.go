@@ -1,20 +1,34 @@
 // Package auth implementa la lógica del servicio de autenticación.
 package auth
 
+// Roles permitidos para un usuario del sistema.
+const (
+	RolAdmin   = "admin"
+	RolCliente = "cliente"
+)
+
+// RolValido indica si el rol recibido es uno de los valores permitidos.
+func RolValido(rol string) bool {
+	return rol == RolAdmin || rol == RolCliente
+}
+
 // Usuario representa un usuario del sistema.
-// No se manejan roles: todos los usuarios tienen las mismas capacidades.
+// El rol (admin o cliente) solo controla la interfaz del frontend:
+// la API no exige autorización por rol.
 type Usuario struct {
 	ID       int    `json:"id"`
 	Nombre   string `json:"nombre"`
 	Email    string `json:"email"`
 	Password string `json:"password,omitempty"`
+	Rol      string `json:"rol"`
 }
 
-// UsuarioSinPassword retorna el usuario sin el campo password.
+// UsuarioSinPassword es la vista pública del usuario, sin el campo password.
 type UsuarioSinPassword struct {
 	ID     int    `json:"id"`
 	Nombre string `json:"nombre"`
 	Email  string `json:"email"`
+	Rol    string `json:"rol"`
 }
 
 // LoginRequest es el body de POST /auth/login.
@@ -28,6 +42,7 @@ type RegisterRequest struct {
 	Nombre   string `json:"nombre"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	Rol      string `json:"rol"`
 }
 
 // SinPassword convierte un Usuario a UsuarioSinPassword.
@@ -36,5 +51,6 @@ func (u *Usuario) SinPassword() UsuarioSinPassword {
 		ID:     u.ID,
 		Nombre: u.Nombre,
 		Email:  u.Email,
+		Rol:    u.Rol,
 	}
 }

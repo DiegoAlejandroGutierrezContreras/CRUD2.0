@@ -21,11 +21,11 @@
         <div class="flex flex-col md:flex-row md:items-end justify-between gap-space-md">
           <div class="flex flex-col gap-space-xs">
             <h1 class="font-display-lg text-display-lg text-on-surface tracking-tight">Facturas</h1>
-            <p class="font-body-md text-body-md text-on-surface-variant">Facturas generadas</p>
+            <p class="font-body-md text-body-md text-on-surface-variant" id="facturas-subtitle">Facturas generadas</p>
           </div>
           <div class="flex items-center gap-space-md self-start md:self-auto">
             <span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider" id="facturas-count">0 registro(s)</span>
-            <a class="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-primary-container text-on-primary font-label-md text-label-md hover:bg-primary transition-colors shadow-sm" href="nueva-factura.html">
+            <a class="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-primary-container text-on-primary font-label-md text-label-md hover:bg-primary transition-colors shadow-sm" href="nueva-factura.html" id="new-invoice-button">
               <span class="material-symbols-outlined text-[18px]">add</span>
               Nueva factura
             </a>
@@ -57,9 +57,9 @@
           <div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center text-secondary mb-space-md">
             <span class="material-symbols-outlined text-headline-lg">receipt_long</span>
           </div>
-          <p class="font-headline-sm text-headline-sm text-on-surface mb-space-xs">No hay facturas registradas</p>
+          <p class="font-headline-sm text-headline-sm text-on-surface mb-space-xs" id="facturas-empty-title">No hay facturas registradas</p>
           <p class="font-body-md text-body-md text-on-surface-variant max-w-sm">El historial de facturación se encuentra vacío actualmente.</p>
-          <a class="mt-4 inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-primary-container text-on-primary font-label-md text-label-md hover:bg-primary transition-colors" href="nueva-factura.html">
+          <a class="mt-4 inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-primary-container text-on-primary font-label-md text-label-md hover:bg-primary transition-colors" href="nueva-factura.html" id="empty-new-invoice-button">
             <span class="material-symbols-outlined text-[18px]">add</span>
             Crear la primera factura
           </a>

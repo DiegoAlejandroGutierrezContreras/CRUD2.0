@@ -1,5 +1,5 @@
 // Servicio de Autenticación - Puerto 8081
-// Gestiona registro, login y consulta de usuarios sin JWT ni roles.
+// Gestiona registro con rol (admin/cliente), login y consulta de usuarios, sin JWT.
 package main
 
 import (

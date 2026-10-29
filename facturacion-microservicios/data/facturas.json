@@ -8,7 +8,8 @@
     },
     "usuario": {
       "id": 1,
-      "nombre": "Ricardo Gómez"
+      "nombre": "Ricardo Gómez",
+      "rol": "admin"
     },
     "productos": [
       {
@@ -38,7 +39,8 @@
     },
     "usuario": {
       "id": 1,
-      "nombre": "Ricardo Gómez"
+      "nombre": "Ricardo Gómez",
+      "rol": "admin"
     },
     "productos": [
       {
@@ -68,7 +70,8 @@
     },
     "usuario": {
       "id": 3,
-      "nombre": "diego"
+      "nombre": "diego",
+      "rol": "admin"
     },
     "productos": [
       {
@@ -98,7 +101,8 @@
     },
     "usuario": {
       "id": 3,
-      "nombre": "diego"
+      "nombre": "diego",
+      "rol": "admin"
     },
     "productos": [
       {

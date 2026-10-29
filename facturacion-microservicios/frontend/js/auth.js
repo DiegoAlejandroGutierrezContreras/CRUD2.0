@@ -82,6 +82,7 @@ export function initRegister() {
   const nameInput = document.getElementById("name");
   const emailInput = document.getElementById("email");
   const passwordInput = document.getElementById("password");
+  const rolSelect = document.getElementById("rol");
   const submitButton = document.getElementById("submit-button");
   const errorBanner = document.getElementById("inline-error-banner");
 
@@ -92,6 +93,7 @@ export function initRegister() {
     const nombre = nameInput.value.trim();
     const email = emailInput.value.trim();
     const password = passwordInput.value;
+    const rol = rolSelect?.value || "";
 
     if (!nombre) {
       showBanner(errorBanner, "El nombre es obligatorio.");
@@ -105,10 +107,14 @@ export function initRegister() {
       showBanner(errorBanner, "La contraseña debe tener al menos 6 caracteres.");
       return;
     }
+    if (rol !== "admin" && rol !== "cliente") {
+      showBanner(errorBanner, "Selecciona el tipo de cuenta (rol).");
+      return;
+    }
 
     setButtonLoading(submitButton, true, "Creando cuenta...");
     try {
-      await apiPost(API.auth, "/auth/register", { nombre, email, password });
+      await apiPost(API.auth, "/auth/register", { nombre, email, password, rol });
       window.location.replace(
         `index.html?registrado=1&email=${encodeURIComponent(email)}`
       );

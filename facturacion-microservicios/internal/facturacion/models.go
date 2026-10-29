@@ -19,10 +19,11 @@ type FacturaCliente struct {
 }
 
 // FacturaUsuario es la información del usuario que emitió la factura.
-// No se manejan roles.
+// El rol se copia del usuario en el servicio de autenticación.
 type FacturaUsuario struct {
 	ID     int    `json:"id"`
 	Nombre string `json:"nombre"`
+	Rol    string `json:"rol"`
 }
 
 // FacturaItem es un producto dentro de una factura.
@@ -54,6 +55,7 @@ type UsuarioExterno struct {
 	ID     int    `json:"id"`
 	Nombre string `json:"nombre"`
 	Email  string `json:"email"`
+	Rol    string `json:"rol"`
 }
 
 // ClienteExterno es la respuesta de GET /clientes/{id}.

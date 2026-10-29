@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"facturacion-microservicios/internal/httpx"
@@ -136,6 +137,7 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		Usuario: FacturaUsuario{
 			ID:     usuario.ID,
 			Nombre: usuario.Nombre,
+			Rol:    usuario.Rol,
 		},
 		Productos: productosFactura,
 		Total:     total,
@@ -163,7 +165,13 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondCreated(w, factura)
 }
 
+// emailClienteQuery es el parámetro de query con el correo del cliente.
+// Lo usa el rol cliente del frontend para ver solo sus facturas; la API no
+// exige autorización, es una restricción visual del proyecto académico.
+const emailClienteQuery = "email"
+
 // handleList maneja GET /facturas.
+// Con ?email=... filtra las facturas cuyo factura.cliente.email coincida.
 func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 	facturas, err := h.store.GetAll()
 	if err != nil {
@@ -175,6 +183,16 @@ func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 		facturas = []Factura{}
 	}
 
+	if email := strings.TrimSpace(r.URL.Query().Get(emailClienteQuery)); email != "" {
+		filtradas := make([]Factura, 0, len(facturas))
+		for _, factura := range facturas {
+			if strings.EqualFold(factura.Cliente.Email, email) {
+				filtradas = append(filtradas, factura)
+			}
+		}
+		facturas = filtradas
+	}
+
 	sort.Slice(facturas, func(i, j int) bool {
 		return facturas[i].FacturaID > facturas[j].FacturaID
 	})
@@ -183,6 +201,8 @@ func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGet maneja GET /facturas/{id}.
+// Con ?email=... valida que el correo del cliente de la factura coincida; si
+// no, responde 403 "No tienes acceso a esta factura".
 func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
@@ -197,6 +217,12 @@ func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 	if factura == nil {
 		httpx.RespondError(w, http.StatusNotFound, fmt.Sprintf("Factura con ID %d no encontrada", id))
+		return
+	}
+
+	if email := strings.TrimSpace(r.URL.Query().Get(emailClienteQuery)); email != "" &&
+		!strings.EqualFold(factura.Cliente.Email, email) {
+		httpx.RespondError(w, http.StatusForbidden, "No tienes acceso a esta factura")
 		return
 	}
 

@@ -1,11 +1,18 @@
-// Detalle de factura, modal JSON e impresión.
+// Detalle de factura, modal JSON e impresión. El rol cliente solo puede ver
+// facturas cuyo cliente tenga el mismo correo que el usuario de la sesión.
 
 import { API } from "./config.js";
 import { apiGet } from "./api.js";
 import { initLayout } from "./layout.js";
-import { escapeHTML, formatCurrency, formatDate, showToast } from "./ui.js";
+import { formatCurrency, formatDate, showToast } from "./ui.js";
+
+const ACCESO_DENEGADO = "No tienes acceso a esta factura";
 
 let facturaActual = null;
+
+function emailsIguales(a, b) {
+  return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+}
 
 function renderFactura(factura) {
   facturaActual = factura;
@@ -20,6 +27,10 @@ function renderFactura(factura) {
   document.getElementById("invoice-total").textContent = formatCurrency(factura.total);
   document.getElementById("json-title").textContent = `Factura #${factura.factura_id} JSON`;
   document.getElementById("json-code").textContent = JSON.stringify(factura, null, 2);
+
+  const rol = factura.usuario?.rol;
+  const rolLabel = rol === "admin" ? "Administrador" : rol === "cliente" ? "Cliente" : "—";
+  document.getElementById("invoice-user-rol").textContent = rolLabel;
 
   const tbody = document.getElementById("invoice-items");
   tbody.innerHTML = "";
@@ -70,23 +81,38 @@ function initJsonModal() {
   });
 }
 
-async function loadFactura() {
+async function loadFactura(usuario) {
   const id = Number(new URLSearchParams(window.location.search).get("id"));
   if (!id || !Number.isFinite(id) || id <= 0) {
     showError("No se indicó una factura válida.");
     return;
   }
 
+  const esAdmin = usuario?.rol === "admin";
+  let path = `/facturas/${id}`;
+  if (!esAdmin && usuario?.email) {
+    path += `?email=${encodeURIComponent(usuario.email)}`;
+  }
+
   try {
-    const factura = await apiGet(API.facturacion, `/facturas/${id}`);
+    const factura = await apiGet(API.facturacion, path);
+
+    // Doble verificación en el navegador (la respuesta del backend ya filtró).
+    if (!esAdmin && !emailsIguales(factura?.cliente?.email, usuario?.email)) {
+      showError(ACCESO_DENEGADO);
+      showToast(ACCESO_DENEGADO, "error");
+      return;
+    }
+
     renderFactura(factura);
   } catch (error) {
-    showError(error.message);
-    showToast(error.message, "error");
+    const message = error.status === 403 ? ACCESO_DENEGADO : error.message;
+    showError(message);
+    showToast(message, "error");
   }
 }
 
-initLayout("facturas");
+const usuario = initLayout("facturas");
 initJsonModal();
 document.getElementById("btn-print")?.addEventListener("click", () => window.print());
-loadFactura();
+loadFactura(usuario);

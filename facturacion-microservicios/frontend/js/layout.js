@@ -1,14 +1,24 @@
-// Header y footer compartidos. Sin roles ni tokens.
+// Header y footer compartidos. El menú se adapta al rol del usuario:
+// admin ve todas las secciones, cliente solo Productos y Facturas.
+// No es seguridad real: la API sigue abierta sin autorización.
 
-import { clearUsuario, requireSession } from "./session.js";
+import { clearUsuario, requireRoles } from "./session.js";
 import { escapeHTML } from "./ui.js";
 
 const NAV_ITEMS = [
-  { id: "productos", label: "Productos", href: "productos.html" },
-  { id: "clientes", label: "Clientes", href: "clientes.html" },
-  { id: "nueva-factura", label: "Nueva factura", href: "nueva-factura.html" },
-  { id: "facturas", label: "Facturas", href: "facturas.html" },
+  { id: "productos", label: "Productos", href: "productos.html", roles: ["admin", "cliente"] },
+  { id: "clientes", label: "Clientes", href: "clientes.html", roles: ["admin"] },
+  { id: "nueva-factura", label: "Nueva factura", href: "nueva-factura.html", roles: ["admin"] },
+  { id: "facturas", label: "Facturas", href: "facturas.html", roles: ["admin", "cliente"] },
 ];
+
+// Roles permitidos por página. Cada página interna se valida al inicializarse.
+const PAGE_ROLES = {
+  productos: ["admin", "cliente"],
+  clientes: ["admin"],
+  "nueva-factura": ["admin"],
+  facturas: ["admin", "cliente"],
+};
 
 function navLink(item, active) {
   const classes =
@@ -22,8 +32,9 @@ function renderHeader(usuario, active) {
   const container = document.getElementById("app-header");
   if (!container) return;
 
-  const links = NAV_ITEMS.map((item) => navLink(item, active)).join("");
-  const mobileLinks = NAV_ITEMS.map(
+  const items = NAV_ITEMS.filter((item) => item.roles.includes(usuario.rol));
+  const links = items.map((item) => navLink(item, active)).join("");
+  const mobileLinks = items.map(
     (item) =>
       `<a class="block px-space-md py-2.5 rounded-lg font-label-md text-label-md ${
         item.id === active
@@ -31,6 +42,8 @@ function renderHeader(usuario, active) {
           : "text-on-surface-variant hover:bg-surface-container"
       }" href="${item.href}">${item.label}</a>`
   ).join("");
+
+  const rolLabel = usuario.rol === "admin" ? "Administrador" : "Cliente";
 
   container.innerHTML = `
     <header class="no-print fixed top-0 left-0 right-0 z-50 bg-surface/90 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
@@ -40,6 +53,7 @@ function renderHeader(usuario, active) {
           <nav class="hidden md:flex items-center gap-space-xs">${links}</nav>
         </div>
         <div class="flex items-center gap-space-md shrink-0">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm">${rolLabel}</span>
           <span class="hidden sm:inline font-label-md text-label-md text-on-surface max-w-[180px] truncate" title="${escapeHTML(usuario.nombre)}">${escapeHTML(usuario.nombre)}</span>
           <span class="hidden sm:inline text-outline-variant select-none">|</span>
           <button class="hidden sm:inline font-label-md text-label-md text-on-surface-variant hover:text-error transition-colors" data-logout type="button">Cerrar sesión</button>
@@ -89,12 +103,13 @@ function renderFooter() {
 }
 
 /**
- * Inicializa la sesión visual de una página interna.
+ * Inicializa la sesión visual de una página interna y valida el rol según
+ * PAGE_ROLES. Si el rol no está permitido, redirige al catálogo.
  * @param {"productos"|"clientes"|"nueva-factura"|"facturas"} active
  * @returns {object|null} usuario de la sesión
  */
 export function initLayout(active) {
-  const usuario = requireSession();
+  const usuario = requireRoles(PAGE_ROLES[active] || ["admin"]);
   if (!usuario) return null;
 
   renderHeader(usuario, active);

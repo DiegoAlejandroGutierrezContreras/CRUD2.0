@@ -13,7 +13,7 @@ El sistema implementa una arquitectura orientada a microservicios independientes
 ### Componentes:
 
 1. **Frontend (JavaScript / HTML):** Interfaz multipágina desacoplada servida por un servidor web estático (`:3000`). Incluye inicio de sesión, registro, catálogo de productos con CRUD, directorio de clientes con CRUD completo, emisión de facturas con control de stock, historial y detalle de factura con modal JSON e impresión a PDF.
-2. **Servicio 1 - Autenticación (`:8081`):** Microservicio para registro, login y consulta de usuarios. No emite tokens ni maneja roles; las contraseñas se almacenan en texto plano como simplificación académica. Persiste en `data/usuarios.json`.
+2. **Servicio 1 - Autenticación (`:8081`):** Microservicio para registro con rol (`admin`/`cliente`), login y consulta de usuarios. No emite tokens; las contraseñas se almacenan en texto plano como simplificación académica y el rol solo se usa en la interfaz del frontend. Persiste en `data/usuarios.json`.
 3. **Servicio 2 - Productos (`:8082`):** Microservicio para operaciones CRUD del catálogo (precios y stock) y para el descuento atómico de stock solicitado por Facturación. Rutas abiertas, sin JWT ni autorización. Persiste en `data/productos.json`.
 4. **Servicio 3 - Clientes (`:8083`):** Microservicio para operaciones CRUD de clientes (nombre, cédula cc, correo, dirección). Rutas abiertas, sin JWT ni autorización. Persiste en `data/clientes.json`.
 5. **Servicio de Facturación (`:8084`):** Microservicio orquestador que consume a los tres microservicios anteriores para generar facturas, validar stock y descontarlo. Persiste en `data/facturas.json`.
@@ -40,10 +40,10 @@ graph TD
         DBFact[("data/facturas.json")]
     end
 
-    UI -->|POST /auth/login, /auth/register| AuthSvc
-    UI -->|GET /productos| ProdSvc
-    UI -->|GET, POST /clientes| CliSvc
-    UI -->|POST /facturas, GET /facturas| FactSvc
+    UI -->|POST /auth/login, /auth/register (rol)| AuthSvc
+    UI -->|GET /productos + CRUD| ProdSvc
+    UI -->|CRUD /clientes| CliSvc
+    UI -->|POST /facturas, GET /facturas?email=| FactSvc
 
     FactSvc -->|1. GET /auth/usuarios/{id}| AuthSvc
     FactSvc -->|2. GET /clientes/{id}| CliSvc
@@ -66,9 +66,9 @@ Ninguna ruta requiere autenticación ni cabecera `Authorization`. Todos los serv
 
 #### Servicio de Autenticación (`puerto 8081`)
 
-- `POST /auth/register`: Registra un usuario nuevo (`nombre`, `email`, `password`). Valida nombre obligatorio, formato de email, email único y contraseña de al menos 6 caracteres. Guarda la contraseña en texto plano y responde `201` con `id`, `nombre` y `email` (sin password).
-- `POST /auth/login`: Recibe `email` y `password`, busca el usuario y compara la contraseña con `crypto/subtle.ConstantTimeCompare`. Responde `200` con los datos del usuario (sin password) o `401` si las credenciales son incorrectas. **No genera token.**
-- `GET /auth/usuarios/{id}`: Retorna `id`, `nombre` y `email`. Es consumido por Facturación para registrar quién emitió la factura. Responde `404` si el usuario no existe.
+- `POST /auth/register`: Registra un usuario nuevo (`nombre`, `email`, `password`, `rol`). Valida nombre obligatorio, formato de email, email único, contraseña de al menos 6 caracteres y que el rol sea `admin` o `cliente` (responde `400` si falta o es inválido, aceptando cualquier combinación de mayúsculas). Guarda la contraseña en texto plano y responde `201` con `id`, `nombre`, `email` y `rol` (sin password).
+- `POST /auth/login`: Recibe `email` y `password`, busca el usuario y compara la contraseña con `crypto/subtle.ConstantTimeCompare`. Responde `200` con los datos del usuario y su rol (sin password) o `401` si las credenciales son incorrectas. **No genera token.**
+- `GET /auth/usuarios/{id}`: Retorna `id`, `nombre`, `email` y `rol`. Es consumido por Facturación para registrar quién emitió la factura. Responde `404` si el usuario no existe.
 
 #### Servicio de Productos (`puerto 8082`)
 
@@ -89,9 +89,9 @@ Ninguna ruta requiere autenticación ni cabecera `Authorization`. Todos los serv
 
 #### Servicio de Facturación (`puerto 8084`)
 
-- `POST /facturas`: Recibe `usuario_id`, `cliente_id` y una lista de `items` (`producto_id` y `cantidad`). Consulta los servicios de Auth, Clientes y Productos, valida stock, calcula subtotales y total, asigna `factura_id` autoincremental y `fecha` actual, guarda en `data/facturas.json`, descuenta el stock y retorna la factura con `201`.
-- `GET /facturas`: Lista todas las facturas ordenadas de la más reciente a la más antigua.
-- `GET /facturas/{id}`: Retorna el detalle de una factura o `404` si no existe.
+- `POST /facturas`: Recibe `usuario_id`, `cliente_id` y una lista de `items` (`producto_id` y `cantidad`). Consulta los servicios de Auth, Clientes y Productos, valida stock, calcula subtotales y total, asigna `factura_id` autoincremental y `fecha` actual, guarda en `data/facturas.json` (copiando el rol del usuario emisor), descuenta el stock y retorna la factura con `201`.
+- `GET /facturas`: Lista todas las facturas ordenadas de la más reciente a la más antigua. Con el parámetro `?email=...` retorna únicamente las facturas cuyo `factura.cliente.email` coincida con el correo dado (sin distinguir mayúsculas); el rol cliente del frontend lo usa para ver solo sus facturas.
+- `GET /facturas/{id}`: Retorna el detalle de una factura o `404` si no existe. Con `?email=...` valida que el correo coincida con `factura.cliente.email`: si no coincide responde `403` con el mensaje "No tienes acceso a esta factura".
 
 ---
 
@@ -99,14 +99,14 @@ Ninguna ruta requiere autenticación ni cabecera `Authorization`. Todos los serv
 
 #### Flujo 1: Autenticación de Usuario (Registro y Login)
 
-1. El usuario envía `POST /auth/register` con su nombre, correo y contraseña. El servicio valida los datos, comprueba que el correo no exista y guarda el registro en `data/usuarios.json` con la contraseña en texto plano.
-2. El usuario envía `POST /auth/login` con correo y contraseña. El servicio busca el usuario y compara la contraseña; si es correcta responde con `id`, `nombre` y `email`.
-3. El frontend guarda ese objeto usuario en `localStorage` y redirige al catálogo. No se almacena ni envía ningún token. Esa sesión visual solo controla qué páginas se muestran; no protege los endpoints.
+1. El usuario envía `POST /auth/register` con su nombre, correo, contraseña y el rol elegido en `registro.html` (`admin` o `cliente`). El servicio valida los datos, comprueba que el correo no exista y guarda el registro en `data/usuarios.json` con la contraseña en texto plano.
+2. El usuario envía `POST /auth/login` con correo y contraseña. El servicio busca el usuario y compara la contraseña; si es correcta responde con `id`, `nombre`, `email` y `rol`.
+3. El frontend guarda ese objeto usuario (con rol) en `localStorage` y redirige al catálogo. No se almacena ni envía ningún token. El rol controla el menú y las guardias de página: admin ve todo el CRUD, cliente solo lectura del catálogo y sus propias facturas. Si una sesión guardada no tiene rol válido, se descarta y se vuelve al login.
 
 #### Flujo 2: Operaciones CRUD (Productos y Clientes)
 
-1. **Productos:** Las operaciones `GET`, `POST`, `PUT` y `DELETE` sobre `/productos` son atendidas directamente por el microservicio del puerto `8082`, sin middleware de autorización. Las modificaciones actualizan `data/productos.json`.
-2. **Clientes:** Las operaciones `GET`, `POST`, `PUT` y `DELETE` sobre `/clientes` son atendidas por el microservicio del puerto `8083`, sin middleware de autorización. El frontend permite registrar clientes mediante un modal. Las modificaciones actualizan `data/clientes.json`.
+1. **Productos:** Las operaciones `GET`, `POST`, `PUT` y `DELETE` sobre `/productos` son atendidas directamente por el microservicio del puerto `8082`, sin middleware de autorización. El frontend muestra las acciones de CRUD solo al rol admin. Las modificaciones actualizan `data/productos.json`.
+2. **Clientes:** Las operaciones `GET`, `POST`, `PUT` y `DELETE` sobre `/clientes` son atendidas por el microservicio del puerto `8083`, sin middleware de autorización. El frontend administra clientes (crear, editar y eliminar con confirmación) desde su página reservada al rol admin. Las modificaciones actualizan `data/clientes.json`, y las facturas ya emitidas conservan la copia de los datos del cliente que guardan al momento de emitirse.
 
 #### Flujo 3: Generación de Factura con Control de Stock
 
@@ -123,7 +123,7 @@ Ninguna ruta requiere autenticación ni cabecera `Authorization`. Todos los serv
      ]
    }
    ```
-4. **Consulta de usuario:** Facturación realiza `GET /auth/usuarios/{usuario_id}` para obtener `id` y `nombre`.
+4. **Consulta de usuario:** Facturación realiza `GET /auth/usuarios/{usuario_id}` para obtener `id`, `nombre` y `rol`.
 5. **Consulta de cliente:** Facturación realiza `GET /clientes/{cliente_id}` para obtener `id`, `nombre` y `email`.
 6. **Consulta y validación de productos:** Por cada item, consulta `GET /productos/{producto_id}` para obtener nombre y precio vigente. Si algún producto no tiene stock suficiente, responde `409` sin crear la factura.
 7. **Cálculo y persistencia:** Calcula subtotales y total, asigna `factura_id` y `fecha`, y guarda la factura en `data/facturas.json`.
@@ -135,7 +135,7 @@ Ninguna ruta requiere autenticación ni cabecera `Authorization`. Todos los serv
 
 ## (c) Ejemplo de Factura con Esquema Exacto
 
-Esquema: `{ "factura_id", "cliente": {"id","nombre","email"}, "usuario": {"id","nombre"}, "productos": [{"id","nombre","cantidad","precio_unitario","subtotal"}], "total", "fecha": "YYYY-MM-DD" }`.
+Esquema: `{ "factura_id", "cliente": {"id","nombre","email"}, "usuario": {"id","nombre","rol"}, "productos": [{"id","nombre","cantidad","precio_unitario","subtotal"}], "total", "fecha": "YYYY-MM-DD" }`.
 
 ```json
 {
@@ -147,7 +147,8 @@ Esquema: `{ "factura_id", "cliente": {"id","nombre","email"}, "usuario": {"id","
   },
   "usuario": {
     "id": 1,
-    "nombre": "Ricardo Gómez"
+    "nombre": "Ricardo Gómez",
+    "rol": "admin"
   },
   "productos": [
     {
@@ -177,10 +178,10 @@ Esquema: `{ "factura_id", "cliente": {"id","nombre","email"}, "usuario": {"id","
 ### Decisiones de alcance
 
 - **Sin JWT, tokens, sesiones, cookies ni OAuth.** El curso no cubrió esos mecanismos y no forman parte del alcance del proyecto.
-- **Sin roles.** Todos los usuarios registrados tienen las mismas capacidades; los modelos `Usuario`, `UsuarioSinPassword` y `FacturaUsuario`, los seeds y la interfaz no incluyen el campo `rol`.
+- **Roles como simplificación académica.** El campo `rol` (`admin` o `cliente`) se guarda en `data/usuarios.json` y en el emisor (`usuario.rol`) de cada factura. El frontend lo usa para filtrar el menú, bloquear páginas por URL, ocultar el CRUD del catálogo a los clientes y pedir al backend solo las facturas de su correo (`GET /facturas?email=...` y `GET /facturas/{id}?email=...` con `403`). La API no exige autorización: una llamada directa sin filtros puede leer todo, igual que ocurre con las contraseñas.
 - **Contraseñas en texto plano.** Es una simplificación acordada por el equipo para el alcance académico. Un sistema real debe usar un hash con sal (por ejemplo, Argon2id o bcrypt) y nunca almacenar contraseñas legibles.
-- **Endpoints abiertos.** La "sesión" del frontend es solo visual: `localStorage` guarda el usuario para mostrar su nombre y evitar entrar a páginas internas sin haber iniciado sesión, pero no autentica las llamadas HTTP.
-- **Sin edición de facturas en la interfaz.** Las facturas son inmutables una vez emitidas. El CRUD de productos y clientes se administra desde la interfaz.
+- **Endpoints abiertos.** La "sesión" del frontend es solo visual: `localStorage` guarda el usuario con su rol para adaptar las páginas, pero no autentica las llamadas HTTP.
+- **Sin edición de facturas en la interfaz.** Las facturas son inmutables una vez emitidas; el CRUD de productos y clientes se administra desde la interfaz con acciones visibles para el rol admin.
 - **Sin generación de PDF en el servidor.** La impresión y el guardado en PDF se delegan al navegador.
 
 ### Pruebas automatizadas
@@ -194,6 +195,7 @@ go test ./...
 Cobertura principal:
 
 - `internal/jsondb`: concurrencia de IDs, `Transact` con confirmación y reversión, reapertura del archivo.
-- `internal/auth`: registro, validación de datos, login correcto/incorrecto y consulta de usuarios sin exponer password.
+- `internal/auth`: registro con rol válido e inválido, normalización del rol, validación de datos, login correcto/incorrecto y consulta de usuarios sin exponer password.
+- `internal/clientes`: CRUD completo, unicidad de email y CC, y códigos 400/404/409.
 - `internal/productos`: descuento atómico de lotes, rechazo sin cambios de stock, combinación de ítems repetidos y validaciones.
-- `internal/facturacion`: emisión con descuento de stock, rechazo por stock insuficiente, compensación cuando falla el descuento, listado, detalle y referencias inválidas.
+- `internal/facturacion`: emisión con rol del emisor, rechazo por stock insuficiente, compensación cuando falla el descuento, listado filtrado por correo del cliente, detalle con `403` si el correo no pertenece a la factura, detalle y referencias inválidas.
