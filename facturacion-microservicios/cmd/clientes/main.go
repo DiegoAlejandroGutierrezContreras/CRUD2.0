@@ -19,11 +19,15 @@ import (
 func main() {
 	port := getEnv("PORT", "8083")
 	dataFile := getEnv("DATA_FILE", "data/clientes.json")
+	authURL := getEnv("AUTH_URL", "http://localhost:8081")
+	internalToken := getEnv("INTERNAL_TOKEN", "facturacion-interno")
 
-	log.Printf("👥 Servicio de Clientes iniciando en puerto %s", port)
+	log.Printf("Servicio de Clientes iniciando en puerto %s", port)
 	log.Printf("   Archivo de datos: %s", dataFile)
+	log.Printf("   Auth URL: %s", authURL)
 
-	// Crear store de clientes (IDs nuevos desde 203)
+	// Crear store de clientes. El ID inicial es solo una semilla: jsondb sube
+	// nextID al máximo ID que ya exista en el archivo.
 	store, err := jsondb.New[clientes.Cliente](dataFile, 203,
 		func(c *clientes.Cliente) int { return c.ID },
 		func(c *clientes.Cliente, id int) { c.ID = id })
@@ -31,11 +35,11 @@ func main() {
 		log.Fatalf("Error inicializando store de clientes: %v", err)
 	}
 
-	handler := clientes.NewHandler(store)
+	handler := clientes.NewHandlerConInterno(store, authURL, internalToken)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	// Rutas abiertas con soporte CORS (sin JWT ni autorización)
+	// Lectura con sesión; mutaciones solo para administradores.
 	finalHandler := middleware.CORS(mux)
 
 	server := &http.Server{
@@ -56,7 +60,7 @@ func main() {
 		server.Shutdown(ctx)
 	}()
 
-	log.Printf("👥 Servicio de Clientes escuchando en http://localhost:%s", port)
+	log.Printf("Servicio de Clientes escuchando en http://localhost:%s", port)
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatalf("Error en servidor: %v", err)
 	}

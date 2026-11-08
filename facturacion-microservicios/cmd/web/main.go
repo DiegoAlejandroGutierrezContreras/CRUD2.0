@@ -16,7 +16,7 @@ func main() {
 	port := getEnv("PORT", "3000")
 	frontendDir := getEnv("FRONTEND_DIR", "frontend")
 
-	log.Printf("🌐 Servidor web iniciando en puerto %s", port)
+	log.Printf("Servidor web iniciando en puerto %s", port)
 	log.Printf("   Sirviendo archivos desde: %s", frontendDir)
 
 	fs := http.FileServer(http.Dir(frontendDir))
@@ -41,7 +41,7 @@ func main() {
 		server.Shutdown(ctx)
 	}()
 
-	log.Printf("🌐 Frontend disponible en http://localhost:%s", port)
+	log.Printf("Servidor web escuchando en http://localhost:%s", port)
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatalf("Error en servidor web: %v", err)
 	}

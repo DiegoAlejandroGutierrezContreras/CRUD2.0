@@ -1,5 +1,6 @@
 // Servicio de Autenticación - Puerto 8081
-// Gestiona registro con rol (admin/cliente), login y consulta de usuarios, sin JWT.
+// Gestiona registro con rol (admin/cliente), login con token de sesión opaco,
+// logout y consulta de usuarios. No usa JWT.
 package main
 
 import (
@@ -19,11 +20,15 @@ import (
 func main() {
 	port := getEnv("PORT", "8081")
 	dataFile := getEnv("DATA_FILE", "data/usuarios.json")
+	clientesURL := getEnv("CLIENTES_URL", "http://localhost:8083")
+	internalToken := getEnv("INTERNAL_TOKEN", "facturacion-interno")
 
-	log.Printf("🔐 Servicio de Autenticación iniciando en puerto %s", port)
+	log.Printf("Servicio de Autenticación iniciando en puerto %s", port)
 	log.Printf("   Archivo de datos: %s", dataFile)
+	log.Printf("   Clientes URL: %s", clientesURL)
 
-	// Crear store de usuarios (IDs nuevos desde 3)
+	// Crear store de usuarios. El ID inicial es solo una semilla: jsondb sube
+	// nextID al máximo ID que ya exista en el archivo.
 	store, err := jsondb.New[auth.Usuario](dataFile, 3,
 		func(u *auth.Usuario) int { return u.ID },
 		func(u *auth.Usuario, id int) { u.ID = id })
@@ -31,7 +36,8 @@ func main() {
 		log.Fatalf("Error inicializando store de usuarios: %v", err)
 	}
 
-	handler := auth.NewHandler(store)
+	sessions := auth.NewSessionStore(ttlDesdeEnv("SESSION_TTL", auth.SessionTTLPorDefecto))
+	handler := auth.NewHandlerConClientes(store, sessions, auth.NewClientesRegistro(clientesURL, internalToken))
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -57,11 +63,26 @@ func main() {
 		server.Shutdown(ctx)
 	}()
 
-	log.Printf("🔐 Servicio de Autenticación escuchando en http://localhost:%s", port)
+	log.Printf("Servicio de Autenticación escuchando en http://localhost:%s", port)
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatalf("Error en servidor: %v", err)
 	}
 	log.Println("Servicio de autenticación detenido correctamente")
+}
+
+// ttlDesdeEnv lee una duración de la variable de entorno y usa el valor por
+// defecto si no existe o no es un duration válido (por ejemplo "8h", "30m").
+func ttlDesdeEnv(key string, defaultVal time.Duration) time.Duration {
+	valor := os.Getenv(key)
+	if valor == "" {
+		return defaultVal
+	}
+	ttl, err := time.ParseDuration(valor)
+	if err != nil || ttl <= 0 {
+		log.Printf("SESSION_TTL inválido (%q); se usa %s", valor, defaultVal)
+		return defaultVal
+	}
+	return ttl
 }
 
 func getEnv(key, defaultVal string) string {

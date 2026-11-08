@@ -1,8 +1,8 @@
-// Login y registro sin tokens.
+// Login y registro. El login guarda el usuario y el token opaco de sesión.
 
 import { API } from "./config.js";
 import { apiPost } from "./api.js";
-import { redirectIfLoggedIn, setUsuario } from "./session.js";
+import { homeFor, redirectIfLoggedIn, setSession } from "./session.js";
 import { setButtonLoading } from "./ui.js";
 
 function showBanner(element, message, type = "error") {
@@ -44,6 +44,8 @@ export function initLogin() {
     showBanner(successBanner, "Cuenta creada correctamente. Inicia sesión.", "success");
     const email = params.get("email");
     if (email) emailInput.value = email;
+  } else if (params.get("expirado") === "1") {
+    showBanner(errorBanner, "Tu sesión expiró. Inicia sesión nuevamente.");
   }
 
   form.addEventListener("submit", async (event) => {
@@ -60,9 +62,10 @@ export function initLogin() {
 
     setButtonLoading(submitButton, true, "Verificando...");
     try {
-      const usuario = await apiPost(API.auth, "/auth/login", { email, password });
-      setUsuario(usuario);
-      window.location.replace("productos.html");
+      const login = await apiPost(API.auth, "/auth/login", { email, password });
+      setSession(login);
+      // El cliente entra directo a sus facturas; el admin, al catálogo.
+      window.location.replace(homeFor(login.usuario?.rol));
     } catch (error) {
       showBanner(errorBanner, error.message || "No se pudo iniciar sesión.");
       passwordInput.value = "";
@@ -79,6 +82,7 @@ export function initRegister() {
   const form = document.getElementById("signup-form");
   if (!form) return;
 
+  const nameField = document.getElementById("name-field");
   const nameInput = document.getElementById("name");
   const emailInput = document.getElementById("email");
   const passwordInput = document.getElementById("password");
@@ -86,19 +90,27 @@ export function initRegister() {
   const submitButton = document.getElementById("submit-button");
   const errorBanner = document.getElementById("inline-error-banner");
 
+  // El rol manda: el cliente no escribe nombre, solo correo y contraseña.
+  function actualizarCampoNombre() {
+    const rol = rolSelect?.value || "";
+    if (nameField && nameInput) {
+      nameField.hidden = rol !== "admin";
+      if (rol !== "admin") nameInput.value = "";
+    }
+  }
+
+  rolSelect?.addEventListener("change", actualizarCampoNombre);
+  actualizarCampoNombre();
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     hideBanner(errorBanner);
 
-    const nombre = nameInput.value.trim();
+    const rol = rolSelect?.value || "";
     const email = emailInput.value.trim();
     const password = passwordInput.value;
-    const rol = rolSelect?.value || "";
+    const nombre = rol === "admin" ? nameInput.value.trim() : "";
 
-    if (!nombre) {
-      showBanner(errorBanner, "El nombre es obligatorio.");
-      return;
-    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       showBanner(errorBanner, "Ingresa un correo electrónico válido.");
       return;
@@ -111,10 +123,15 @@ export function initRegister() {
       showBanner(errorBanner, "Selecciona el tipo de cuenta (rol).");
       return;
     }
+    if (rol === "admin" && !nombre) {
+      showBanner(errorBanner, "El nombre es obligatorio para la cuenta de administrador.");
+      return;
+    }
 
     setButtonLoading(submitButton, true, "Creando cuenta...");
     try {
-      await apiPost(API.auth, "/auth/register", { nombre, email, password, rol });
+      const cuerpo = rol === "admin" ? { nombre, email, password, rol } : { email, password, rol };
+      await apiPost(API.auth, "/auth/register", cuerpo);
       window.location.replace(
         `index.html?registrado=1&email=${encodeURIComponent(email)}`
       );

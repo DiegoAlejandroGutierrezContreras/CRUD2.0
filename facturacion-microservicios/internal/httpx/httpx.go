@@ -3,8 +3,10 @@ package httpx
 
 import (
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
+	"strings"
 )
 
 // ErrorResponse es la estructura estándar de error.
@@ -40,7 +42,26 @@ func DecodeJSON(w http.ResponseWriter, r *http.Request, dest any) bool {
 		RespondError(w, http.StatusBadRequest, "JSON inválido: "+err.Error())
 		return false
 	}
+
+	// Rechazar contenido extra después del objeto: el body debe contener un
+	// único documento JSON.
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		RespondError(w, http.StatusBadRequest, "El body debe contener un único objeto JSON")
+		return false
+	}
+
 	return true
+}
+
+// BearerToken extrae el token de la cabecera "Authorization: Bearer <token>".
+// Retorna una cadena vacía si la cabecera no existe o tiene otro esquema.
+func BearerToken(r *http.Request) string {
+	const prefijo = "Bearer "
+	cabecera := r.Header.Get("Authorization")
+	if len(cabecera) <= len(prefijo) || !strings.EqualFold(cabecera[:len(prefijo)], prefijo) {
+		return ""
+	}
+	return strings.TrimSpace(cabecera[len(prefijo):])
 }
 
 // RespondCreated responde con 201 y el objeto creado.

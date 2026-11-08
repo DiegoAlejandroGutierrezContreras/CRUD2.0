@@ -1,31 +1,40 @@
 // Header y footer compartidos. El menú se adapta al rol del usuario:
-// admin ve todas las secciones, cliente solo Productos y Facturas.
-// No es seguridad real: la API sigue abierta sin autorización.
+// admin ve todas las secciones; cliente solo sus facturas (ver y descargar).
+// El backend aplica las reglas por rol; el menú solo refleja los permisos.
 
-import { clearUsuario, requireRoles } from "./session.js";
+import { API } from "./config.js";
+import { apiPost } from "./api.js";
+import { clearSession, getToken, requireRoles } from "./session.js";
 import { escapeHTML } from "./ui.js";
 
 const NAV_ITEMS = [
-  { id: "productos", label: "Productos", href: "productos.html", roles: ["admin", "cliente"] },
+  { id: "productos", label: "Productos", href: "productos.html", roles: ["admin"] },
   { id: "clientes", label: "Clientes", href: "clientes.html", roles: ["admin"] },
   { id: "nueva-factura", label: "Nueva factura", href: "nueva-factura.html", roles: ["admin"] },
   { id: "facturas", label: "Facturas", href: "facturas.html", roles: ["admin", "cliente"] },
 ];
 
 // Roles permitidos por página. Cada página interna se valida al inicializarse.
+// Un cliente solo puede entrar al historial de sus propias facturas.
 const PAGE_ROLES = {
-  productos: ["admin", "cliente"],
+  productos: ["admin"],
   clientes: ["admin"],
   "nueva-factura": ["admin"],
   facturas: ["admin", "cliente"],
 };
 
-function navLink(item, active) {
+function navLabel(item, usuario) {
+  // Al cliente solo le interesa su historial: la etiqueta del menú es clara.
+  if (item.id === "facturas" && usuario.rol !== "admin") return "Mis facturas";
+  return item.label;
+}
+
+function navLink(item, active, label) {
   const classes =
     item.id === active
       ? "bg-secondary-container text-on-secondary-container"
       : "text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface";
-  return `<a class="px-space-md py-space-sm font-label-md text-label-md rounded-lg transition-colors ${classes}" href="${item.href}">${item.label}</a>`;
+  return `<a class="px-space-md py-space-sm font-label-md text-label-md rounded-lg transition-colors ${classes}" href="${item.href}">${label}</a>`;
 }
 
 function renderHeader(usuario, active) {
@@ -33,23 +42,27 @@ function renderHeader(usuario, active) {
   if (!container) return;
 
   const items = NAV_ITEMS.filter((item) => item.roles.includes(usuario.rol));
-  const links = items.map((item) => navLink(item, active)).join("");
+  const links = items
+    .map((item) => navLink(item, active, navLabel(item, usuario)))
+    .join("");
   const mobileLinks = items.map(
     (item) =>
       `<a class="block px-space-md py-2.5 rounded-lg font-label-md text-label-md ${
         item.id === active
           ? "bg-secondary-container text-on-secondary-container"
           : "text-on-surface-variant hover:bg-surface-container"
-      }" href="${item.href}">${item.label}</a>`
+      }" href="${item.href}">${navLabel(item, usuario)}</a>`
   ).join("");
 
   const rolLabel = usuario.rol === "admin" ? "Administrador" : "Cliente";
+  // El logo lleva a la pantalla principal de cada rol.
+  const homeHref = usuario.rol === "admin" ? "productos.html" : "facturas.html";
 
   container.innerHTML = `
     <header class="no-print fixed top-0 left-0 right-0 z-50 bg-surface/90 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
       <div class="h-16 max-w-7xl mx-auto px-margin lg:px-margin-desktop flex items-center justify-between gap-space-md">
         <div class="flex items-center gap-space-xl min-w-0">
-          <a class="font-headline-sm text-headline-sm tracking-tight text-on-surface select-none" href="productos.html">Factura</a>
+          <a class="font-headline-sm text-headline-sm tracking-tight text-on-surface select-none" href="${homeHref}">Factura</a>
           <nav class="hidden md:flex items-center gap-space-xs">${links}</nav>
         </div>
         <div class="flex items-center gap-space-md shrink-0">
@@ -81,8 +94,17 @@ function renderHeader(usuario, active) {
   });
 
   container.querySelectorAll("[data-logout]").forEach((button) => {
-    button.addEventListener("click", () => {
-      clearUsuario();
+    button.addEventListener("click", async () => {
+      // Invalidar el token en el servidor antes de borrarlo localmente. Si el
+      // servicio no responde, se cierra la sesión local de todas formas.
+      if (getToken()) {
+        try {
+          await apiPost(API.auth, "/auth/logout");
+        } catch {
+          /* la sesión local se cierra igual */
+        }
+      }
+      clearSession();
       window.location.replace("index.html");
     });
   });
@@ -104,7 +126,7 @@ function renderFooter() {
 
 /**
  * Inicializa la sesión visual de una página interna y valida el rol según
- * PAGE_ROLES. Si el rol no está permitido, redirige al catálogo.
+ * PAGE_ROLES. Si el rol no está permitido, redirige a su pantalla principal.
  * @param {"productos"|"clientes"|"nueva-factura"|"facturas"} active
  * @returns {object|null} usuario de la sesión
  */

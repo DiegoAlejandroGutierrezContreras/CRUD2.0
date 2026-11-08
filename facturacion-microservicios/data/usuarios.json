@@ -19,5 +19,19 @@
     "email": "diego@gmail.com",
     "password": "diego123",
     "rol": "admin"
+  },
+  {
+    "id": 4,
+    "nombre": "alejo",
+    "email": "alejo123@gmail.com",
+    "password": "alejo123",
+    "rol": "cliente"
+  },
+  {
+    "id": 5,
+    "nombre": "carlos",
+    "email": "carlos@example.com",
+    "password": "diego123",
+    "rol": "cliente"
   }
 ]

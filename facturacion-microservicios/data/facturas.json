@@ -115,5 +115,29 @@
     ],
     "total": 204000,
     "fecha": "2026-10-28"
+  },
+  {
+    "factura_id": 5005,
+    "cliente": {
+      "id": 203,
+      "nombre": "María López",
+      "email": "maria@example.com"
+    },
+    "usuario": {
+      "id": 1,
+      "nombre": "Ricardo Gómez",
+      "rol": "admin"
+    },
+    "productos": [
+      {
+        "id": 102,
+        "nombre": "Mouse inalámbrico Logitech",
+        "cantidad": 2,
+        "precio_unitario": 12000,
+        "subtotal": 24000
+      }
+    ],
+    "total": 24000,
+    "fecha": "2026-10-29"
   }
 ]

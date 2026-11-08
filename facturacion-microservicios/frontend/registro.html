@@ -25,22 +25,26 @@
         <div class="w-full max-w-[420px] bg-surface-container-lowest rounded-xl p-space-xl shadow-sm">
           <div class="mb-space-lg">
             <h1 class="font-headline-lg text-headline-lg text-on-surface tracking-tight">Crear cuenta</h1>
-            <p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Solo necesitas un nombre, un correo y una contraseña.</p>
+            <p class="font-body-sm text-body-sm text-on-surface-variant mt-1">
+              Clientes: solo correo y contraseña. El nombre lo registró el administrador.
+            </p>
           </div>
 
           <div class="hidden mb-space-lg items-center gap-space-sm px-space-md py-space-sm rounded-lg bg-error-container text-on-error-container text-body-sm font-body-sm" id="inline-error-banner">
             <span class="material-symbols-outlined text-[18px] shrink-0 select-none">error</span>
-            <span id="inline-error-text">Ya existe un usuario con ese email</span>
+            <span id="inline-error-text">Revisa los datos del formulario</span>
           </div>
 
           <form class="space-y-space-md" id="signup-form" novalidate>
-            <div class="flex flex-col gap-space-xs">
+            <div class="flex flex-col gap-space-xs" id="name-field">
               <label class="font-label-md text-label-md text-on-surface" for="name">Nombre completo</label>
-              <input class="h-[44px] w-full px-space-md bg-surface-container-lowest rounded-lg font-body-md text-body-md text-on-surface placeholder:text-outline/60 outline-none transition-all duration-150" id="name" name="name" placeholder="Ej. Santiago Morales" required type="text" />
+              <input class="h-[44px] w-full px-space-md bg-surface-container-lowest rounded-lg font-body-md text-body-md text-on-surface placeholder:text-outline/60 outline-none transition-all duration-150" id="name" name="name" placeholder="Ej. Santiago Morales" type="text" />
+              <p class="font-body-sm text-body-sm text-on-surface-variant pt-0.5 select-none">Solo para cuentas administrador.</p>
             </div>
             <div class="flex flex-col gap-space-xs">
               <label class="font-label-md text-label-md text-on-surface" for="email">Correo electrónico</label>
               <input autocomplete="email" class="h-[44px] w-full px-space-md bg-surface-container-lowest rounded-lg font-body-md text-body-md text-on-surface placeholder:text-outline/60 outline-none transition-all duration-150" id="email" name="email" placeholder="ejemplo@universidad.edu.co" required type="email" />
+              <p class="font-body-sm text-body-sm text-secondary pt-0.5 select-none">Si eres cliente, usa el correo que registró el administrador.</p>
             </div>
             <div class="flex flex-col gap-space-xs">
               <label class="font-label-md text-label-md text-on-surface" for="password">Contraseña</label>
@@ -53,11 +57,15 @@
                 <option value="cliente">Cliente</option>
                 <option value="admin">Administrador</option>
               </select>
+              <p class="font-body-sm text-body-sm text-on-surface-variant pt-0.5 select-none">Cliente: solo correo válido registrado por el admin.</p>
             </div>
             <div class="pt-space-sm">
               <button class="relative h-[44px] w-full bg-primary-container hover:bg-primary active:scale-[0.99] text-on-primary font-label-md text-label-md rounded-lg flex items-center justify-center gap-2 transition-all duration-150 select-none cursor-pointer" id="submit-button" type="submit">
                 Crear cuenta
               </button>
+              <p class="font-body-sm text-body-sm text-on-surface-variant text-center pt-space-sm">
+                ¿Eres administrador? Elige el rol y escribe tu nombre.
+              </p>
             </div>
           </form>
 

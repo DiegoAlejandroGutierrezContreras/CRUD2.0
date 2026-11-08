@@ -1,0 +1,8 @@
+bin/
+logs/
+*.exe
+*.exe~
+.running_pids
+.running_pids.json
+.env
+tmp-*.json

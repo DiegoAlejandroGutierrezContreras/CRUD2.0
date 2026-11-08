@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="js/head-guard.js"></script>
   <title>Nueva factura — Factura</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -21,7 +22,9 @@
         <div class="mb-space-lg flex items-center justify-between gap-space-md">
           <div>
             <h1 class="font-headline-lg text-headline-lg text-on-surface tracking-tight">Nueva factura</h1>
-            <p class="font-body-md text-body-md text-on-surface-variant mt-1">Selecciona el cliente y los productos. El stock se valida antes de emitir.</p>
+            <p class="font-body-md text-body-md text-on-surface-variant mt-1">
+              Asocia la factura al correo del cliente y valida stock antes de emitir.
+            </p>
           </div>
           <div class="hidden sm:flex items-center gap-space-sm bg-surface-container px-space-md py-1.5 rounded-full text-on-surface-variant font-label-sm text-label-sm shrink-0">
             <span class="w-2 h-2 rounded-full bg-tertiary-container inline-block"></span>

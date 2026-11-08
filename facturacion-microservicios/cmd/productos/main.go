@@ -19,11 +19,14 @@ import (
 func main() {
 	port := getEnv("PORT", "8082")
 	dataFile := getEnv("DATA_FILE", "data/productos.json")
+	authURL := getEnv("AUTH_URL", "http://localhost:8081")
 
-	log.Printf(" Servicio de Productos iniciando en puerto %s", port)
+	log.Printf("Servicio de Productos iniciando en puerto %s", port)
 	log.Printf("   Archivo de datos: %s", dataFile)
+	log.Printf("   Auth URL: %s", authURL)
 
-	// Crear store de productos (IDs nuevos desde 104)
+	// Crear store de productos. El ID inicial es solo una semilla: jsondb sube
+	// nextID al máximo ID que ya exista en el archivo.
 	store, err := jsondb.New[productos.Producto](dataFile, 104,
 		func(p *productos.Producto) int { return p.ID },
 		func(p *productos.Producto, id int) { p.ID = id })
@@ -31,11 +34,11 @@ func main() {
 		log.Fatalf("Error inicializando store de productos: %v", err)
 	}
 
-	handler := productos.NewHandler(store)
+	handler := productos.NewHandler(store, authURL)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	// Rutas abiertas con soporte CORS (sin JWT ni autorización)
+	// Lectura con sesión; mutaciones solo para administradores.
 	finalHandler := middleware.CORS(mux)
 
 	server := &http.Server{

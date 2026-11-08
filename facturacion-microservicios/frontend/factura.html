@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="js/head-guard.js"></script>
   <title>Factura — Factura</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -27,9 +28,13 @@
             <span class="material-symbols-outlined text-[18px] text-secondary">code</span>
             <span>Ver JSON</span>
           </button>
-          <button class="h-10 px-space-md rounded-lg bg-primary-container text-on-primary hover:bg-primary transition-all font-label-md text-label-md shadow-sm active:scale-[0.99] flex items-center gap-space-xs" id="btn-print" type="button">
-            <span class="material-symbols-outlined text-[18px]">print</span>
-            <span>Imprimir / PDF</span>
+          <button class="h-10 px-space-md rounded-lg bg-surface-container-lowest text-on-surface hover:bg-surface-container transition-all font-label-md text-label-md shadow-sm active:scale-[0.99] flex items-center gap-space-xs" id="btn-print" type="button">
+            <span class="material-symbols-outlined text-[18px] text-secondary">print</span>
+            <span>Imprimir</span>
+          </button>
+          <button class="h-10 px-space-md rounded-lg bg-primary-container text-on-primary hover:bg-primary transition-all font-label-md text-label-md shadow-sm active:scale-[0.99] flex items-center gap-space-xs" id="btn-download" type="button">
+            <span class="material-symbols-outlined text-[18px]">download</span>
+            <span>Descargar PDF</span>
           </button>
         </div>
       </div>

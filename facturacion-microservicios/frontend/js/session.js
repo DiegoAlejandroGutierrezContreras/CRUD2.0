@@ -1,7 +1,9 @@
-// Sesión del usuario sin tokens: solo se guarda el objeto usuario (con su rol)
-// en localStorage. El rol controla la navegación del frontend; no es seguridad.
+// Sesión del usuario: guarda en localStorage el usuario público, el token
+// opaco que emite el servicio de autenticación y su fecha de expiración.
+// El token se envía como "Authorization: Bearer <token>" en cada petición; el
+// backend lo valida y aplica las reglas por rol (no es solo seguridad visual).
 
-const STORAGE_KEY = "facturacion_usuario";
+const STORAGE_KEY = "facturacion_sesion";
 
 const ROLES_VALIDOS = ["admin", "cliente"];
 
@@ -10,46 +12,82 @@ export function rolValido(rol) {
   return ROLES_VALIDOS.includes(rol);
 }
 
-export function getUsuario() {
+/**
+ * Devuelve la sesión guardada, o null si no existe, está incompleta o expiró.
+ * Al detectar una sesión inválida la elimina del almacenamiento.
+ */
+export function getSession() {
+  let sesion;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    sesion = raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
+
+  if (
+    !sesion ||
+    !sesion.usuario ||
+    typeof sesion.token !== "string" ||
+    !sesion.token ||
+    !rolValido(sesion.usuario.rol)
+  ) {
+    clearSession();
+    return null;
+  }
+
+  if (sesion.expira && Date.parse(sesion.expira) <= Date.now()) {
+    clearSession();
+    return null;
+  }
+
+  return sesion;
 }
 
-export function setUsuario(usuario) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(usuario));
+/** Guarda la respuesta del login: { usuario, token, expira }. */
+export function setSession({ usuario, token, expira }) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ usuario, token, expira }));
 }
 
-export function clearUsuario() {
+export function getUsuario() {
+  return getSession()?.usuario ?? null;
+}
+
+/** Token opaco de la sesión actual, o cadena vacía si no hay sesión. */
+export function getToken() {
+  return getSession()?.token ?? "";
+}
+
+export function clearSession() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
 /**
- * Guardia de navegación. No es seguridad real: solo evita mostrar las
- * pantallas internas cuando no se ha iniciado sesión con un rol válido.
- * Las sesiones guardadas sin rol (anteriores a la función de roles) se
- * descartan para pedir un nuevo inicio de sesión.
+ * Pantalla principal según el rol: el admin administra el catálogo y el
+ * cliente solo accede a sus facturas.
+ * @param {string} rol "admin" o "cliente".
+ */
+export function homeFor(rol) {
+  return rol === "admin" ? "productos.html" : "facturas.html";
+}
+
+/**
+ * Guardia de navegación. Verifica que exista una sesión con token y rol
+ * válidos; si no, redirige al login. El backend sigue siendo la autoridad:
+ * esta guardia solo evita mostrar pantallas sin sesión.
  */
 export function requireSession() {
-  const usuario = getUsuario();
-  if (!usuario) {
+  const sesion = getSession();
+  if (!sesion) {
     window.location.replace("index.html");
     return null;
   }
-  if (!rolValido(usuario.rol)) {
-    clearUsuario();
-    window.location.replace("index.html");
-    return null;
-  }
-  return usuario;
+  return sesion.usuario;
 }
 
 /**
  * Guardia por rol: si el rol del usuario no está en la lista permitida,
- * redirige al catálogo. Tampoco es seguridad real; solo adapta la interfaz.
+ * redirige a la pantalla principal de ese rol.
  * @param {string[]} roles Roles autorizados para la página.
  */
 export function requireRoles(roles) {
@@ -57,14 +95,17 @@ export function requireRoles(roles) {
   if (!usuario) return null;
 
   if (!roles.includes(usuario.rol)) {
-    window.location.replace("productos.html");
+    // Si el rol no puede ver esta página, vuelve a su pantalla principal
+    // (el cliente a sus facturas; el admin al catálogo).
+    window.location.replace(homeFor(usuario.rol));
     return null;
   }
   return usuario;
 }
 
 export function redirectIfLoggedIn() {
-  if (getUsuario()) {
-    window.location.replace("productos.html");
+  const sesion = getSession();
+  if (sesion) {
+    window.location.replace(homeFor(sesion.usuario.rol));
   }
 }

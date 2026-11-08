@@ -10,6 +10,14 @@ type Cliente struct {
 	Direccion string `json:"direccion"`
 }
 
+// ClienteEmail es la vista reducida que devuelve la ruta servicio-a-servicio.
+// No incluye cédula ni dirección para no exponerlos fuera de Clientes.
+type ClienteEmail struct {
+	ID     int    `json:"id"`
+	Nombre string `json:"nombre"`
+	Email  string `json:"email"`
+}
+
 // CreateRequest es el body de POST /clientes.
 type CreateRequest struct {
 	Nombre    string `json:"nombre"`

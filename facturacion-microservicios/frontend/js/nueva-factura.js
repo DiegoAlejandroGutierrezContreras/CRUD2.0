@@ -56,10 +56,11 @@ function renderClientSelect() {
   }
 
   select.disabled = false;
+  // Cada opción muestra el correo: el admin asocia la factura de forma inequívoca.
   state.clientes.forEach((client) => {
     const option = document.createElement("option");
     option.value = String(client.id);
-    option.textContent = `${client.id} — ${client.nombre}`;
+    option.textContent = `${client.id} — ${client.nombre} — ${client.email}`;
     select.appendChild(option);
   });
 
@@ -84,6 +85,7 @@ function updateClientInfo() {
   }
 
   elements.clientInfo?.classList.remove("hidden");
+  // La factura queda asociada a este email exacto: conviene que sea visible.
   elements.clientEmail.textContent = client.email;
   elements.clientAddress.textContent = client.direccion;
   updateGenerateState();
@@ -355,7 +357,6 @@ async function generateInvoice() {
     }));
 
     const factura = await apiPost(API.facturacion, "/facturas", {
-      usuario_id: state.usuario.id,
       cliente_id: state.clienteId,
       items,
     });

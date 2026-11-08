@@ -1,10 +1,24 @@
-// Cliente HTTP centralizado. No usa tokens ni cabecera Authorization.
+// Cliente HTTP centralizado. Adjunta el token de la sesión y, si el backend
+// responde 401 con un token enviado, cierra la sesión local y vuelve al login.
+
+import { clearSession, getToken } from "./session.js";
+
+const TIMEOUT_MS = 15000;
 
 export class ApiError extends Error {
   constructor(message, status = 0) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+  }
+}
+
+/** Redirige al login cuando la sesión ya no es válida en el servidor. */
+function sesionExpirada() {
+  clearSession();
+  const path = window.location.pathname;
+  if (!path.endsWith("index.html") && path !== "/") {
+    window.location.replace("index.html?expirado=1");
   }
 }
 
@@ -15,20 +29,38 @@ export class ApiError extends Error {
  * @param {RequestInit} options Opciones de fetch.
  */
 export async function apiFetch(baseUrl, path, options = {}) {
+  const token = getToken();
   const headers = {
     Accept: "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.body ? { "Content-Type": "application/json" } : {}),
     ...(options.headers || {}),
   };
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
   let response;
   try {
-    response = await fetch(baseUrl + path, { ...options, headers });
-  } catch {
+    response = await fetch(baseUrl + path, {
+      ...options,
+      headers,
+      signal: options.signal || controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new ApiError("El servidor tardó demasiado en responder.", 0);
+    }
     throw new ApiError(
       "No se pudo conectar con el servidor. Verifica que los microservicios estén en ejecución.",
       0
     );
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (response.status === 401 && token) {
+    sesionExpirada();
   }
 
   if (response.status === 204) {

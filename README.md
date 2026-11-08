@@ -4,14 +4,14 @@ Proyecto de Programación Avanzada 2026_2: sistema de facturación con arquitect
 
 Todo el código vive en la carpeta [`facturacion-microservicios/`](facturacion-microservicios/).
 
-> **Alcance académico:** no se usan JWT, tokens, sesiones, cookies ni OAuth. El campo `rol` (`admin` o `cliente`) adapta la interfaz del frontend y filtra las facturas del cliente, pero **la API no exige autorización por rol**. Las contraseñas se almacenan en texto plano por decisión del equipo; **no es un diseño apto para producción**.
+> **Alcance académico:** no se usan JWT, tokens, sesiones, cookies ni OAuth. El campo `rol` (`admin` o `cliente`) adapta la interfaz del frontend y filtra las facturas del cliente, mientras los microservicios validan el rol en cada petición. Las contraseñas se almacenan en texto plano por decisión del equipo; **no es un diseño apto para producción**.
 
 ## Opciones del sistema
 
 | Rol | Puede |
 | :--- | :--- |
 | **Admin** | Catálogo de productos con CRUD, CRUD de clientes, emitir facturas y ver todas las facturas |
-| **Cliente** | Catálogo en solo lectura y ver únicamente sus facturas (`factura.cliente.email == usuario.email`) |
+| **Cliente** | Solo sus facturas (`factura.cliente.email == usuario.email`): verlas y descargarlas en PDF. Se registra con correo y contraseña; el correo debe haber sido creado antes por el admin en Clientes, y el nombre se copia de ahí. No accede al catálogo, a clientes ni a la emisión |
 
 ## Ejecución rápida
 

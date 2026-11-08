@@ -12,5 +12,12 @@
     "cc": "56789101",
     "email": "ana@example.com",
     "direccion": "Carrera 10 #20-30, Medellín"
+  },
+  {
+    "id": 203,
+    "nombre": "María López",
+    "cc": "1020304050",
+    "email": "maria@example.com",
+    "direccion": "Calle 45 #12-34, Bogotá"
   }
 ]

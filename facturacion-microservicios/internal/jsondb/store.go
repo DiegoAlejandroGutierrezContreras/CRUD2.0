@@ -87,6 +87,14 @@ func (s *Store[T]) writeFile(items []T) error {
 		return fmt.Errorf("error escribiendo archivo temporal: %w", err)
 	}
 
+	// Forzar el volcado a disco antes del rename para reducir el riesgo de
+	// perder la última escritura ante un corte de energía.
+	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("error sincronizando archivo temporal: %w", err)
+	}
+
 	if err := tmpFile.Close(); err != nil {
 		os.Remove(tmpPath)
 		return fmt.Errorf("error cerrando archivo temporal: %w", err)
@@ -147,6 +155,77 @@ func (s *Store[T]) Create(item T) (T, error) {
 	}
 
 	return item, nil
+}
+
+// CreateUnique agrega un elemento con ID autoincremental solo si validate
+// aprueba el conjunto actual. La validación y la escritura ocurren bajo el
+// mismo lock, de modo que dos peticiones concurrentes no pueden pasar la
+// comprobación a la vez (por ejemplo, para emails únicos).
+func (s *Store[T]) CreateUnique(item T, validate func(items []T) error) (T, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	items, err := s.readFile()
+	if err != nil {
+		return item, err
+	}
+
+	if err := validate(items); err != nil {
+		return item, err
+	}
+
+	s.setID(&item, s.nextID)
+	s.nextID++
+
+	items = append(items, item)
+
+	if err := s.writeFile(items); err != nil {
+		s.nextID--
+		return item, err
+	}
+
+	return item, nil
+}
+
+// UpdateUnique actualiza un elemento existente aplicando validate antes de
+// mutarlo. La validación, la mutación y la escritura ocurren bajo el mismo
+// lock. Retorna false si el ID no existe.
+func (s *Store[T]) UpdateUnique(id int, updater func(*T), validate func(items []T, index int) error) (T, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	items, err := s.readFile()
+	if err != nil {
+		var zero T
+		return zero, false, err
+	}
+
+	idx := -1
+	for i := range items {
+		if s.getID(&items[i]) == id {
+			idx = i
+			break
+		}
+	}
+
+	if idx == -1 {
+		var zero T
+		return zero, false, nil
+	}
+
+	if err := validate(items, idx); err != nil {
+		var zero T
+		return zero, false, err
+	}
+
+	updater(&items[idx])
+
+	if err := s.writeFile(items); err != nil {
+		var zero T
+		return zero, false, err
+	}
+
+	return items[idx], true, nil
 }
 
 // Update actualiza un elemento existente por su ID. Retorna false si no existe.

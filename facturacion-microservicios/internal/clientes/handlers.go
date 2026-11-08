@@ -1,12 +1,15 @@
 package clientes
 
 import (
+	"crypto/subtle"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"facturacion-microservicios/internal/authclient"
 	"facturacion-microservicios/internal/httpx"
 	"facturacion-microservicios/internal/jsondb"
 )
@@ -14,23 +17,87 @@ import (
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 var ccRegex = regexp.MustCompile(`^\d+$`)
 
+// Errores de unicidad que devuelve la validación atómica del store.
+var (
+	errEmailDuplicado = errors.New("ya existe un cliente con ese email")
+	errCCDuplicada    = errors.New("ya existe un cliente con esa cédula")
+)
+
 // Handler maneja las rutas del servicio de clientes.
 type Handler struct {
-	store *jsondb.Store[Cliente]
+	store         *jsondb.Store[Cliente]
+	auth          *authclient.Client
+	internalToken string
 }
 
-// NewHandler crea un nuevo handler de clientes.
-func NewHandler(store *jsondb.Store[Cliente]) *Handler {
+// NewHandler crea el handler de producción: todas las rutas exigen rol admin.
+// Facturación consulta un cliente reenviando la sesión del admin que emite.
+func NewHandler(store *jsondb.Store[Cliente], authURL string) *Handler {
+	return &Handler{store: store, auth: authclient.New(authURL)}
+}
+
+// NewHandlerConInterno crea el handler habilitando además la ruta
+// `GET /clientes/por-email`, reservada a Auth mediante un token de servicio.
+func NewHandlerConInterno(store *jsondb.Store[Cliente], authURL, internalToken string) *Handler {
+	return &Handler{
+		store:         store,
+		auth:          authclient.New(authURL),
+		internalToken: internalToken,
+	}
+}
+
+// NewHandlerSinAuth crea un handler sin autenticación. Solo para pruebas.
+func NewHandlerSinAuth(store *jsondb.Store[Cliente]) *Handler {
 	return &Handler{store: store}
 }
 
 // RegisterRoutes registra las rutas del servicio.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /clientes", h.handleList)
-	mux.HandleFunc("GET /clientes/{id}", h.handleGet)
-	mux.HandleFunc("POST /clientes", h.handleCreate)
-	mux.HandleFunc("PUT /clientes/{id}", h.handleUpdate)
-	mux.HandleFunc("DELETE /clientes/{id}", h.handleDelete)
+	// La consulta por email es servicio-a-servicio: Auth la usa al registrar
+	// cuentas de clientes. Va fuera del middleware de sesión de Auth.
+	mux.HandleFunc("GET /clientes/por-email", h.handlePorEmail)
+	authclient.Registrar(mux, h.auth, []authclient.Route{
+		{Pattern: "GET /clientes", Handler: h.handleList, AdminOnly: true},
+		{Pattern: "GET /clientes/{id}", Handler: h.handleGet, AdminOnly: true},
+		{Pattern: "POST /clientes", Handler: h.handleCreate, AdminOnly: true},
+		{Pattern: "PUT /clientes/{id}", Handler: h.handleUpdate, AdminOnly: true},
+		{Pattern: "DELETE /clientes/{id}", Handler: h.handleDelete, AdminOnly: true},
+	})
+}
+
+// handlePorEmail responde con la vista mínima de un cliente. Solo la usa Auth
+// al crear cuentas de clientes; por eso exige el token de servicio cuando el
+// handler está en modo producción.
+func (h *Handler) handlePorEmail(w http.ResponseWriter, r *http.Request) {
+	if h.internalToken != "" &&
+		subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Internal-Token")), []byte(h.internalToken)) != 1 {
+		httpx.RespondError(w, http.StatusForbidden, "Token interno inválido")
+		return
+	}
+
+	email := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("email")))
+	if email == "" || !emailRegex.MatchString(email) {
+		httpx.RespondError(w, http.StatusBadRequest, "El formato del email es inválido")
+		return
+	}
+
+	cliente, err := h.store.FindOne(func(c *Cliente) bool {
+		return strings.EqualFold(c.Email, email)
+	})
+	if err != nil {
+		httpx.RespondError(w, http.StatusInternalServerError, "Error interno del servidor")
+		return
+	}
+	if cliente == nil {
+		httpx.RespondError(w, http.StatusNotFound, "No existe un cliente con ese email")
+		return
+	}
+
+	httpx.RespondJSON(w, http.StatusOK, ClienteEmail{
+		ID:     cliente.ID,
+		Nombre: cliente.Nombre,
+		Email:  cliente.Email,
+	})
 }
 
 // handleList maneja GET /clientes.
@@ -104,32 +171,8 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verificar email único
-	existing, err := h.store.FindOne(func(c *Cliente) bool {
-		return strings.EqualFold(c.Email, req.Email)
-	})
-	if err != nil {
-		httpx.RespondError(w, http.StatusInternalServerError, "Error interno del servidor")
-		return
-	}
-	if existing != nil {
-		httpx.RespondError(w, http.StatusConflict, "Ya existe un cliente con ese email")
-		return
-	}
-
-	// Verificar CC único
-	existing, err = h.store.FindOne(func(c *Cliente) bool {
-		return c.CC == req.CC
-	})
-	if err != nil {
-		httpx.RespondError(w, http.StatusInternalServerError, "Error interno del servidor")
-		return
-	}
-	if existing != nil {
-		httpx.RespondError(w, http.StatusConflict, "Ya existe un cliente con esa cédula")
-		return
-	}
-
+	// Verificar email y cédula únicos de forma atómica: la comprobación y la
+	// escritura ocurren bajo el mismo lock del store.
 	cliente := Cliente{
 		Nombre:    req.Nombre,
 		CC:        req.CC,
@@ -137,9 +180,26 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		Direccion: req.Direccion,
 	}
 
-	cliente, err = h.store.Create(cliente)
+	cliente, err := h.store.CreateUnique(cliente, func(items []Cliente) error {
+		for i := range items {
+			if strings.EqualFold(items[i].Email, req.Email) {
+				return errEmailDuplicado
+			}
+			if items[i].CC == req.CC {
+				return errCCDuplicada
+			}
+		}
+		return nil
+	})
 	if err != nil {
-		httpx.RespondError(w, http.StatusInternalServerError, "Error interno del servidor")
+		switch {
+		case errors.Is(err, errEmailDuplicado):
+			httpx.RespondError(w, http.StatusConflict, "Ya existe un cliente con ese email")
+		case errors.Is(err, errCCDuplicada):
+			httpx.RespondError(w, http.StatusConflict, "Ya existe un cliente con esa cédula")
+		default:
+			httpx.RespondError(w, http.StatusInternalServerError, "Error interno del servidor")
+		}
 		return
 	}
 
@@ -169,40 +229,36 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verificar email único (excluyendo el cliente actual)
-	existing, err := h.store.FindOne(func(c *Cliente) bool {
-		return strings.EqualFold(c.Email, req.Email) && c.ID != id
-	})
-	if err != nil {
-		httpx.RespondError(w, http.StatusInternalServerError, "Error interno del servidor")
-		return
-	}
-	if existing != nil {
-		httpx.RespondError(w, http.StatusConflict, "Ya existe un cliente con ese email")
-		return
-	}
-
-	// Verificar CC único (excluyendo el cliente actual)
-	existing, err = h.store.FindOne(func(c *Cliente) bool {
-		return c.CC == req.CC && c.ID != id
-	})
-	if err != nil {
-		httpx.RespondError(w, http.StatusInternalServerError, "Error interno del servidor")
-		return
-	}
-	if existing != nil {
-		httpx.RespondError(w, http.StatusConflict, "Ya existe un cliente con esa cédula")
-		return
-	}
-
-	updated, ok, err := h.store.Update(id, func(c *Cliente) {
+	// Verificar email y cédula únicos (excluyendo el cliente actual) y escribir
+	// en la misma operación atómica.
+	updated, ok, err := h.store.UpdateUnique(id, func(c *Cliente) {
 		c.Nombre = req.Nombre
 		c.CC = req.CC
 		c.Email = req.Email
 		c.Direccion = req.Direccion
+	}, func(items []Cliente, index int) error {
+		for i := range items {
+			if i == index {
+				continue
+			}
+			if strings.EqualFold(items[i].Email, req.Email) {
+				return errEmailDuplicado
+			}
+			if items[i].CC == req.CC {
+				return errCCDuplicada
+			}
+		}
+		return nil
 	})
 	if err != nil {
-		httpx.RespondError(w, http.StatusInternalServerError, "Error interno del servidor")
+		switch {
+		case errors.Is(err, errEmailDuplicado):
+			httpx.RespondError(w, http.StatusConflict, "Ya existe un cliente con ese email")
+		case errors.Is(err, errCCDuplicada):
+			httpx.RespondError(w, http.StatusConflict, "Ya existe un cliente con esa cédula")
+		default:
+			httpx.RespondError(w, http.StatusInternalServerError, "Error interno del servidor")
+		}
 		return
 	}
 	if !ok {

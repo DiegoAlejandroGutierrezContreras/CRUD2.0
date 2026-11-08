@@ -214,13 +214,15 @@ function initModal() {
 // initLayout valida sesión y rol (cliente y admin pueden entrar aquí).
 const usuarioActual = initLayout("productos");
 
-canManageProducts = usuarioActual?.rol === "admin";
+if (usuarioActual) {
+  canManageProducts = usuarioActual.rol === "admin";
 
-if (canManageProducts) {
-  initModal();
-} else {
-  document.getElementById("new-product-button")?.classList.add("hidden");
-  document.getElementById("empty-new-product-button")?.classList.add("hidden");
-  document.getElementById("catalog-actions-heading")?.classList.add("hidden");
+  if (canManageProducts) {
+    initModal();
+  } else {
+    document.getElementById("new-product-button")?.classList.add("hidden");
+    document.getElementById("empty-new-product-button")?.classList.add("hidden");
+    document.getElementById("catalog-actions-heading")?.classList.add("hidden");
+  }
+  loadProducts();
 }
-loadProducts();

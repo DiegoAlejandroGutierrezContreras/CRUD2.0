@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"facturacion-microservicios/internal/authclient"
 	"facturacion-microservicios/internal/httpx"
 	"facturacion-microservicios/internal/jsondb"
 )
@@ -27,25 +28,39 @@ type ServiceURLs struct {
 type Handler struct {
 	store  *jsondb.Store[Factura]
 	urls   ServiceURLs
+	auth   *authclient.Client
 	client *http.Client
 }
 
-// NewHandler crea un nuevo handler de facturación.
+// NewHandler crea el handler de producción. Valida cada petición contra el
+// servicio de autenticación y aplica las reglas por rol.
 func NewHandler(store *jsondb.Store[Factura], urls ServiceURLs) *Handler {
 	return &Handler{
-		store: store,
-		urls:  urls,
-		client: &http.Client{
-			Timeout: 10 * time.Second,
-		},
+		store:  store,
+		urls:   urls,
+		auth:   authclient.New(urls.AuthURL),
+		client: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
-// RegisterRoutes registra las rutas del servicio.
+// NewHandlerSinAuth crea un handler sin autenticación. Solo para pruebas
+// unitarias de la lógica de facturación.
+func NewHandlerSinAuth(store *jsondb.Store[Factura], urls ServiceURLs) *Handler {
+	return &Handler{
+		store:  store,
+		urls:   urls,
+		client: &http.Client{Timeout: 10 * time.Second},
+	}
+}
+
+// RegisterRoutes registra las rutas del servicio. Emitir facturas exige rol
+// admin; consultar exige sesión (el filtro por cliente lo aplica cada handler).
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /facturas", h.handleCreate)
-	mux.HandleFunc("GET /facturas", h.handleList)
-	mux.HandleFunc("GET /facturas/{id}", h.handleGet)
+	authclient.Registrar(mux, h.auth, []authclient.Route{
+		{Pattern: "POST /facturas", Handler: h.handleCreate, AdminOnly: true},
+		{Pattern: "GET /facturas", Handler: h.handleList},
+		{Pattern: "GET /facturas/{id}", Handler: h.handleGet},
+	})
 }
 
 // handleCreate maneja POST /facturas.
@@ -55,8 +70,11 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validar request básico
-	if req.UsuarioID <= 0 {
+	// Validar request básico. El emisor se toma de la sesión; en el modo sin
+	// autenticación (solo pruebas) se usa el usuario_id del body.
+	sesion, autenticado := authclient.UsuarioFromContext(r.Context())
+
+	if !autenticado && req.UsuarioID <= 0 {
 		httpx.RespondError(w, http.StatusBadRequest, "El usuario_id es obligatorio y debe ser mayor a 0")
 		return
 	}
@@ -83,15 +101,32 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	// Combinar items del mismo producto si hubiese repetidos
 	combinedItems := combineItems(req.Items)
 
-	// 1. Obtener el usuario que emite la factura
-	usuario, err := h.getUsuario(req.UsuarioID)
-	if err != nil {
-		handleServiceError(w, err, "autenticación")
-		return
+	// Token del usuario que emite la factura. Se reenvía a los servicios
+	// internos para que apliquen sus propias reglas con la misma sesión.
+	token := httpx.BearerToken(r)
+
+	// 1. Determinar el usuario que emite la factura. Con sesión, el emisor es
+	// siempre el usuario autenticado (no se puede suplantar con usuario_id) y
+	// debe ser admin.
+	var emisor FacturaUsuario
+	if autenticado {
+		if sesion.Rol != authclient.RolAdmin {
+			httpx.RespondError(w, http.StatusForbidden,
+				"Solo un administrador puede emitir facturas")
+			return
+		}
+		emisor = FacturaUsuario{ID: sesion.ID, Nombre: sesion.Nombre, Rol: sesion.Rol}
+	} else {
+		usuario, err := h.getUsuario(req.UsuarioID, token)
+		if err != nil {
+			handleServiceError(w, err, "autenticación")
+			return
+		}
+		emisor = FacturaUsuario{ID: usuario.ID, Nombre: usuario.Nombre, Rol: usuario.Rol}
 	}
 
 	// 2. Obtener cliente desde el servicio de Clientes
-	cliente, err := h.getCliente(req.ClienteID)
+	cliente, err := h.getCliente(req.ClienteID, token)
 	if err != nil {
 		handleServiceError(w, err, "clientes")
 		return
@@ -101,7 +136,7 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	var productosFactura []FacturaItem
 
 	for _, item := range combinedItems {
-		producto, err := h.getProducto(item.ProductoID)
+		producto, err := h.getProducto(item.ProductoID, token)
 		if err != nil {
 			handleServiceError(w, err, "productos")
 			return
@@ -134,11 +169,7 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 			Nombre: cliente.Nombre,
 			Email:  cliente.Email,
 		},
-		Usuario: FacturaUsuario{
-			ID:     usuario.ID,
-			Nombre: usuario.Nombre,
-			Rol:    usuario.Rol,
-		},
+		Usuario:   emisor,
 		Productos: productosFactura,
 		Total:     total,
 		Fecha:     time.Now().Format("2006-01-02"),
@@ -152,7 +183,7 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 
 	// 5. Descontar stock de forma atómica. Si falla, se elimina la factura
 	// recién creada (compensación; no hay transacción distribuida real).
-	if err := h.descontarStock(combinedItems); err != nil {
+	if err := h.descontarStock(combinedItems, token); err != nil {
 		if _, deleteErr := h.store.Delete(factura.FacturaID); deleteErr != nil {
 			// La factura queda creada pero sin descuento de stock; se reporta
 			// el error original de todas formas.
@@ -165,13 +196,14 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	httpx.RespondCreated(w, factura)
 }
 
-// emailClienteQuery es el parámetro de query con el correo del cliente.
-// Lo usa el rol cliente del frontend para ver solo sus facturas; la API no
-// exige autorización, es una restricción visual del proyecto académico.
+// emailClienteQuery es el parámetro de query con el correo del cliente. Solo se
+// usa en el modo sin autenticación (pruebas). En producción el filtro se toma
+// de la sesión y este parámetro se ignora.
 const emailClienteQuery = "email"
 
 // handleList maneja GET /facturas.
-// Con ?email=... filtra las facturas cuyo factura.cliente.email coincida.
+// Con sesión: admin ve todas y cliente solo las de su correo. Sin sesión
+// (pruebas): admite ?email=... como filtro.
 func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 	facturas, err := h.store.GetAll()
 	if err != nil {
@@ -183,7 +215,20 @@ func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 		facturas = []Factura{}
 	}
 
-	if email := strings.TrimSpace(r.URL.Query().Get(emailClienteQuery)); email != "" {
+	if sesion, autenticado := authclient.UsuarioFromContext(r.Context()); autenticado {
+		// Con sesión, el rol cliente solo ve las facturas emitidas a su correo.
+		// El query param se ignora para que no pueda ampliar el alcance.
+		if sesion.Rol != authclient.RolAdmin {
+			filtradas := make([]Factura, 0, len(facturas))
+			for _, factura := range facturas {
+				if strings.EqualFold(factura.Cliente.Email, sesion.Email) {
+					filtradas = append(filtradas, factura)
+				}
+			}
+			facturas = filtradas
+		}
+	} else if email := strings.TrimSpace(r.URL.Query().Get(emailClienteQuery)); email != "" {
+		// Modo sin autenticación (pruebas): filtro por query param.
 		filtradas := make([]Factura, 0, len(facturas))
 		for _, factura := range facturas {
 			if strings.EqualFold(factura.Cliente.Email, email) {
@@ -201,8 +246,8 @@ func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGet maneja GET /facturas/{id}.
-// Con ?email=... valida que el correo del cliente de la factura coincida; si
-// no, responde 403 "No tienes acceso a esta factura".
+// Con sesión: admin ve cualquiera y cliente solo las de su correo (403 en caso
+// contrario). Sin sesión (pruebas): admite ?email=... como validación.
 func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
@@ -220,8 +265,15 @@ func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if email := strings.TrimSpace(r.URL.Query().Get(emailClienteQuery)); email != "" &&
+	if sesion, autenticado := authclient.UsuarioFromContext(r.Context()); autenticado {
+		if sesion.Rol != authclient.RolAdmin &&
+			!strings.EqualFold(factura.Cliente.Email, sesion.Email) {
+			httpx.RespondError(w, http.StatusForbidden, "No tienes acceso a esta factura")
+			return
+		}
+	} else if email := strings.TrimSpace(r.URL.Query().Get(emailClienteQuery)); email != "" &&
 		!strings.EqualFold(factura.Cliente.Email, email) {
+		// Modo sin autenticación (pruebas): validación por query param.
 		httpx.RespondError(w, http.StatusForbidden, "No tienes acceso a esta factura")
 		return
 	}
@@ -267,7 +319,10 @@ func handleServiceError(w http.ResponseWriter, err error, servicio string) {
 	}
 }
 
-func (h *Handler) doRequest(method, url string, body any) ([]byte, int, error) {
+// doRequest llama a otro microservicio. Si token no está vacío, lo reenvía en
+// la cabecera Authorization: las llamadas internas se hacen con la sesión del
+// usuario que originó la petición (por ejemplo, el admin que emite la factura).
+func (h *Handler) doRequest(method, url, token string, body any) ([]byte, int, error) {
 	var reqBody io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -283,6 +338,9 @@ func (h *Handler) doRequest(method, url string, body any) ([]byte, int, error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	resp, err := h.client.Do(req)
 	if err != nil {
@@ -298,8 +356,8 @@ func (h *Handler) doRequest(method, url string, body any) ([]byte, int, error) {
 	return respBody, resp.StatusCode, nil
 }
 
-func (h *Handler) getUsuario(id int) (*UsuarioExterno, error) {
-	body, status, err := h.doRequest("GET", fmt.Sprintf("%s/auth/usuarios/%d", h.urls.AuthURL, id), nil)
+func (h *Handler) getUsuario(id int, token string) (*UsuarioExterno, error) {
+	body, status, err := h.doRequest("GET", fmt.Sprintf("%s/auth/usuarios/%d", h.urls.AuthURL, id), token, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -316,8 +374,8 @@ func (h *Handler) getUsuario(id int) (*UsuarioExterno, error) {
 	return &usuario, nil
 }
 
-func (h *Handler) getCliente(id int) (*ClienteExterno, error) {
-	body, status, err := h.doRequest("GET", fmt.Sprintf("%s/clientes/%d", h.urls.ClientesURL, id), nil)
+func (h *Handler) getCliente(id int, token string) (*ClienteExterno, error) {
+	body, status, err := h.doRequest("GET", fmt.Sprintf("%s/clientes/%d", h.urls.ClientesURL, id), token, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -334,8 +392,8 @@ func (h *Handler) getCliente(id int) (*ClienteExterno, error) {
 	return &cliente, nil
 }
 
-func (h *Handler) getProducto(id int) (*ProductoExterno, error) {
-	body, status, err := h.doRequest("GET", fmt.Sprintf("%s/productos/%d", h.urls.ProductosURL, id), nil)
+func (h *Handler) getProducto(id int, token string) (*ProductoExterno, error) {
+	body, status, err := h.doRequest("GET", fmt.Sprintf("%s/productos/%d", h.urls.ProductosURL, id), token, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -353,7 +411,7 @@ func (h *Handler) getProducto(id int) (*ProductoExterno, error) {
 }
 
 // descontarStock solicita al servicio de productos descontar el stock del lote.
-func (h *Handler) descontarStock(items []CreateFacturaItem) error {
+func (h *Handler) descontarStock(items []CreateFacturaItem, token string) error {
 	reqItems := make([]DescontarStockItem, 0, len(items))
 	for _, item := range items {
 		reqItems = append(reqItems, DescontarStockItem{
@@ -362,7 +420,7 @@ func (h *Handler) descontarStock(items []CreateFacturaItem) error {
 		})
 	}
 
-	body, status, err := h.doRequest("POST", h.urls.ProductosURL+"/productos/descontar-stock",
+	body, status, err := h.doRequest("POST", h.urls.ProductosURL+"/productos/descontar-stock", token,
 		DescontarStockRequest{Items: reqItems})
 	if err != nil {
 		return err

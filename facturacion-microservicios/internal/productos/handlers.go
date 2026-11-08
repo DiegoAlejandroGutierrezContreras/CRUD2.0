@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"facturacion-microservicios/internal/authclient"
 	"facturacion-microservicios/internal/httpx"
 	"facturacion-microservicios/internal/jsondb"
 )
@@ -14,21 +15,31 @@ import (
 // Handler maneja las rutas del servicio de productos.
 type Handler struct {
 	store *jsondb.Store[Producto]
+	auth  *authclient.Client
 }
 
-// NewHandler crea un nuevo handler de productos.
-func NewHandler(store *jsondb.Store[Producto]) *Handler {
+// NewHandler crea el handler de producción: todas las rutas exigen rol admin.
+// El catálogo solo lo consume el administrador y el servicio de Facturación,
+// que reenvía la sesión del admin que emite la factura.
+func NewHandler(store *jsondb.Store[Producto], authURL string) *Handler {
+	return &Handler{store: store, auth: authclient.New(authURL)}
+}
+
+// NewHandlerSinAuth crea un handler sin autenticación. Solo para pruebas.
+func NewHandlerSinAuth(store *jsondb.Store[Producto]) *Handler {
 	return &Handler{store: store}
 }
 
 // RegisterRoutes registra las rutas del servicio.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /productos", h.handleList)
-	mux.HandleFunc("GET /productos/{id}", h.handleGet)
-	mux.HandleFunc("POST /productos", h.handleCreate)
-	mux.HandleFunc("POST /productos/descontar-stock", h.handleDescontarStock)
-	mux.HandleFunc("PUT /productos/{id}", h.handleUpdate)
-	mux.HandleFunc("DELETE /productos/{id}", h.handleDelete)
+	authclient.Registrar(mux, h.auth, []authclient.Route{
+		{Pattern: "GET /productos", Handler: h.handleList, AdminOnly: true},
+		{Pattern: "GET /productos/{id}", Handler: h.handleGet, AdminOnly: true},
+		{Pattern: "POST /productos", Handler: h.handleCreate, AdminOnly: true},
+		{Pattern: "POST /productos/descontar-stock", Handler: h.handleDescontarStock, AdminOnly: true},
+		{Pattern: "PUT /productos/{id}", Handler: h.handleUpdate, AdminOnly: true},
+		{Pattern: "DELETE /productos/{id}", Handler: h.handleDelete, AdminOnly: true},
+	})
 }
 
 // handleList maneja GET /productos.

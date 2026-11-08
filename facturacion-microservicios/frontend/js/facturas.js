@@ -1,9 +1,10 @@
-// Historial de facturas. El rol admin ve todas; el rol cliente solo las
-// facturas de su correo (factura.cliente.email == usuario.email).
+// Historial de facturas. El backend decide el alcance: el rol admin ve todas
+// y el rol cliente solo las facturas emitidas a su correo.
 
 import { API } from "./config.js";
 import { apiGet } from "./api.js";
 import { initLayout } from "./layout.js";
+import { downloadFacturaPDF } from "./pdf.js";
 import { formatCurrency, formatDate, showToast } from "./ui.js";
 
 function aplicarVistaPorRol(usuario) {
@@ -50,28 +51,35 @@ function renderFacturas(facturas) {
       <td class="py-space-sm px-space-lg font-body-md text-body-md text-on-surface-variant">${formatDate(factura.fecha)}</td>
       <td class="py-space-sm px-space-lg font-body-md text-body-md text-on-surface font-semibold factura-cliente"></td>
       <td class="py-space-sm px-space-lg font-tabular-amount-md text-tabular-amount-md text-on-surface text-right tracking-tight">${formatCurrency(factura.total)}</td>
-      <td class="py-space-sm px-space-lg text-right">
+      <td class="py-space-sm px-space-lg text-right whitespace-nowrap">
         <a class="inline-flex items-center justify-center h-8 px-space-md rounded-lg font-label-md text-label-md bg-surface-container-low text-on-surface hover:bg-primary hover:text-on-primary shadow-sm transition-all duration-150" href="factura.html?id=${factura.factura_id}">Ver</a>
+        <button class="inline-flex items-center justify-center h-8 px-space-md ml-space-xs rounded-lg font-label-md text-label-md bg-secondary-container text-on-secondary-container hover:bg-surface-container-highest shadow-sm transition-all duration-150" data-action="download" type="button">Descargar</button>
       </td>
     `;
     row.querySelector(".factura-cliente").textContent = factura.cliente?.nombre || "—";
+    row
+      .querySelector('[data-action="download"]')
+      .addEventListener("click", () => {
+        try {
+          downloadFacturaPDF(factura);
+          showToast(`Factura #${factura.factura_id} descargada.`, "success");
+        } catch {
+          showToast("No se pudo generar el PDF de la factura.", "error");
+        }
+      });
     tbody.appendChild(row);
   });
 }
 
-async function loadFacturas(usuario) {
+async function loadFacturas() {
   const tbody = document.getElementById("facturas-rows");
   if (tbody) {
     tbody.innerHTML = `<tr><td class="py-12 text-center text-on-surface-variant" colspan="5">Cargando facturas...</td></tr>`;
   }
 
-  const esAdmin = usuario?.rol === "admin";
-  const path = esAdmin
-    ? "/facturas"
-    : `/facturas?email=${encodeURIComponent(usuario?.email ?? "")}`;
-
   try {
-    const facturas = await apiGet(API.facturacion, path);
+    // Sin filtros: el backend aplica el alcance según la sesión.
+    const facturas = await apiGet(API.facturacion, "/facturas");
     const list = Array.isArray(facturas) ? facturas : [];
     list.sort((a, b) => b.factura_id - a.factura_id);
     renderFacturas(list);
@@ -87,5 +95,7 @@ async function loadFacturas(usuario) {
 }
 
 const usuario = initLayout("facturas");
-aplicarVistaPorRol(usuario);
-loadFacturas(usuario);
+if (usuario) {
+  aplicarVistaPorRol(usuario);
+  loadFacturas();
+}

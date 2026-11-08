@@ -23,13 +23,14 @@ func main() {
 	productosURL := getEnv("PRODUCTOS_URL", "http://localhost:8082")
 	clientesURL := getEnv("CLIENTES_URL", "http://localhost:8083")
 
-	log.Printf("🧾 Servicio de Facturación iniciando en puerto %s", port)
+	log.Printf("Servicio de Facturación iniciando en puerto %s", port)
 	log.Printf("   Archivo de datos: %s", dataFile)
 	log.Printf("   Auth URL: %s", authURL)
 	log.Printf("   Productos URL: %s", productosURL)
 	log.Printf("   Clientes URL: %s", clientesURL)
 
-	// Crear store de facturas (IDs nuevos desde 5003, ya que hay datos semilla hasta 5002)
+	// Crear store de facturas. El ID inicial es solo una semilla: jsondb sube
+	// nextID al máximo factura_id que ya exista en el archivo.
 	store, err := jsondb.New[facturacion.Factura](dataFile, 5003,
 		func(f *facturacion.Factura) int { return f.FacturaID },
 		func(f *facturacion.Factura, id int) { f.FacturaID = id })
@@ -67,7 +68,7 @@ func main() {
 		server.Shutdown(ctx)
 	}()
 
-	log.Printf("🧾 Servicio de Facturación escuchando en http://localhost:%s", port)
+	log.Printf("Servicio de Facturación escuchando en http://localhost:%s", port)
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatalf("Error en servidor: %v", err)
 	}

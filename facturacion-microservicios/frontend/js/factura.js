@@ -1,18 +1,15 @@
-// Detalle de factura, modal JSON e impresión. El rol cliente solo puede ver
-// facturas cuyo cliente tenga el mismo correo que el usuario de la sesión.
+// Detalle de factura, modal JSON e impresión. El backend autoriza la consulta:
+// un cliente recibe 403 si intenta abrir una factura ajena.
 
 import { API } from "./config.js";
 import { apiGet } from "./api.js";
 import { initLayout } from "./layout.js";
+import { downloadFacturaPDF } from "./pdf.js";
 import { formatCurrency, formatDate, showToast } from "./ui.js";
 
 const ACCESO_DENEGADO = "No tienes acceso a esta factura";
 
 let facturaActual = null;
-
-function emailsIguales(a, b) {
-  return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
-}
 
 function renderFactura(factura) {
   facturaActual = factura;
@@ -81,29 +78,16 @@ function initJsonModal() {
   });
 }
 
-async function loadFactura(usuario) {
+async function loadFactura() {
   const id = Number(new URLSearchParams(window.location.search).get("id"));
   if (!id || !Number.isFinite(id) || id <= 0) {
     showError("No se indicó una factura válida.");
     return;
   }
 
-  const esAdmin = usuario?.rol === "admin";
-  let path = `/facturas/${id}`;
-  if (!esAdmin && usuario?.email) {
-    path += `?email=${encodeURIComponent(usuario.email)}`;
-  }
-
   try {
-    const factura = await apiGet(API.facturacion, path);
-
-    // Doble verificación en el navegador (la respuesta del backend ya filtró).
-    if (!esAdmin && !emailsIguales(factura?.cliente?.email, usuario?.email)) {
-      showError(ACCESO_DENEGADO);
-      showToast(ACCESO_DENEGADO, "error");
-      return;
-    }
-
+    // El backend limita el detalle según la sesión y responde 403 si es ajena.
+    const factura = await apiGet(API.facturacion, `/facturas/${id}`);
     renderFactura(factura);
   } catch (error) {
     const message = error.status === 403 ? ACCESO_DENEGADO : error.message;
@@ -112,7 +96,23 @@ async function loadFactura(usuario) {
   }
 }
 
+function descargarFactura() {
+  if (!facturaActual) {
+    showToast("La factura aún no se ha cargado.", "info");
+    return;
+  }
+  try {
+    downloadFacturaPDF(facturaActual);
+    showToast(`Factura #${facturaActual.factura_id} descargada.`, "success");
+  } catch {
+    showToast("No se pudo generar el PDF de la factura.", "error");
+  }
+}
+
 const usuario = initLayout("facturas");
-initJsonModal();
-document.getElementById("btn-print")?.addEventListener("click", () => window.print());
-loadFactura(usuario);
+if (usuario) {
+  initJsonModal();
+  document.getElementById("btn-print")?.addEventListener("click", () => window.print());
+  document.getElementById("btn-download")?.addEventListener("click", descargarFactura);
+  loadFactura();
+}

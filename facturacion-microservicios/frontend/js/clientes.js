@@ -67,6 +67,17 @@ async function loadClients() {
     clients = await apiGet(API.clientes, "/clientes");
     renderClients(Array.isArray(clients) ? clients : []);
   } catch (error) {
+    const tbody = document.getElementById("clients-table-body");
+    if (tbody) {
+      tbody.innerHTML = "";
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.className = "py-12 text-center text-error";
+      cell.colSpan = 6;
+      cell.textContent = error.message;
+      row.appendChild(cell);
+      tbody.appendChild(row);
+    }
     showToast(error.message, "error");
   }
 }
@@ -212,6 +223,8 @@ function initModal() {
   }
 }
 
-initLayout("clientes");
-initModal();
-loadClients();
+const usuarioActual = initLayout("clientes");
+if (usuarioActual) {
+  initModal();
+  loadClients();
+}
